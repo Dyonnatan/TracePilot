@@ -1,0 +1,21 @@
+# Override opt-in: métricas de host (hostmetrics) e de containers
+# (docker_stats) no mesmo Collector.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.hostmetrics.yml up -d
+#
+# ATENÇÃO: monta /var/run/docker.sock e o filesystem do host (somente
+# leitura) no Collector e o roda como root. Acesso ao socket do Docker
+# equivale a root no host — use só em ambiente local de desenvolvimento.
+services:
+  otel-collector:
+    user: "0:0"
+    # O docker_stats falha o startup do Collector se o daemon demorar a
+    # responder (ex.: durante builds); reinicia em vez de ficar parado.
+    restart: on-failure
+    command:
+      - "--config=/etc/otel-collector-config.yaml"
+      - "--config=/etc/otel-collector-hostmetrics.yaml"
+    volumes:
+      - ./otel-collector-hostmetrics.yaml:/etc/otel-collector-hostmetrics.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/hostfs:ro
