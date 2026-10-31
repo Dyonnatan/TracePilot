@@ -37,9 +37,12 @@ fundamentação teórica em [docs/glossario-conceitos-ia.md](docs/glossario-conc
 ## Arquitetura (visão rápida)
 
 ```
-App instrumentada (demo_app)
-        │  OpenTelemetry (traces/logs/métricas)
-        ▼
+Coletor TracePilot (local-agent)       App instrumentada (demo_app)
+  recursos do SO, na máquina              OpenTelemetry (traces/logs)
+              │                                      │
+              │   API de ingestão direta (ingest/)   │
+              │   app manda log/span em JSON ────────┤
+              ▼                                      ▼
   OTel Collector  ──────▶  OpenObserve (armazenamento/consulta)
         │
         ▼
@@ -59,7 +62,8 @@ TracePilot/
 ├── agents/            # orquestrador LangGraph + agentes especialistas + providers de LLM
 ├── webapp/              # painel web (FastAPI) para monitorar e investigar
 ├── demo_app/           # app FastAPI instrumentada, com falhas controladas
-├── local-agent/         # agente leve em Rust (recursos do SO), instalado na máquina monitorada
+├── local-agent/         # coletor instalável em Rust (recursos do SO), na máquina monitorada
+├── ingest/              # API de ingestão direta: a app manda log/span sem instalar nada
 ├── benchmark/          # notas de avaliação (OpenRCA)
 ├── reports/             # investigações persistidas (JSON)
 ├── docs/                 # arquitetura geral, de código e glossário de conceitos
@@ -67,12 +71,22 @@ TracePilot/
 └── otel-collector-config.yaml
 ```
 
-> O TracePilot é composto por dois sistemas: o **agente local**
+> O TracePilot é composto por dois sistemas: o **coletor instalável**
 > ([`local-agent/`](local-agent/), Rust, baixo impacto — recursos do
 > sistema; FIM/auditoria de usuário ficam a cargo do Wazuh, ver
 > [docs/local-agent-architecture.md](docs/local-agent-architecture.md))
 > instalado na máquina monitorada, e o **servidor TracePilot** (este
 > repositório — processamento pesado dos agentes de IA).
+
+> A telemetria entra por **dois caminhos complementares**: o coletor
+> instalável (padrão) e a **API de ingestão direta**
+> ([`ingest/`](ingest/)), em que a própria aplicação manda log/span em
+> JSON — para infra que não permite instalador (PaaS, serverless,
+> política de segurança) e para quem quer otimizar o envio mandando só o
+> essencial. A integração é feita com um
+> [guia pronto para IA](docs/ai-integration-guide.md) aplicar na stack do
+> cliente, servido pela própria instância em `GET /v1/guide`. Comparação
+> dos dois modos em [docs/ingestion-modes.md](docs/ingestion-modes.md).
 
 > Estágio atual: **MVP funcional com interface web**. O fluxo completo
 > (logs → métricas → traces → diagnóstico → verificação → relatório) roda
@@ -104,6 +118,12 @@ uvicorn webapp.main:app --host 127.0.0.1 --port 8800
 # abra http://localhost:8800 — gere uma falha no demo_app e dispare a
 # investigação direto pelo formulário
 
+# 6. (opcional) Subir a API de ingestão direta, se for integrar uma app
+#     que não pode instalar o coletor (ver docs/ingestion-modes.md)
+uvicorn ingest.main:app --host 127.0.0.1 --port 8810
+# curl http://localhost:8810/v1/health
+# curl http://localhost:8810/v1/guide   # guia de integração, em markdown
+
 # (alternativa: CLI, sem o painel)
 python3 agents/orchestrator.py "checkout falhando com erro 500" \
   --service tracepilot-demo-app
@@ -133,10 +153,13 @@ a **OpenRouter** (`LLM_BACKEND=cloud`) se preferir backend em nuvem — ver
    relatório gerado.
 5. Memória vetorial de incidentes passados (ver gaps em
    `docs/architecture.md`).
-6. Agente local: empacotar `local-agent/` como instalador (MSI/pkg/deb) e
+6. Coletor instalável: empacotar `local-agent/` como instalador (MSI/pkg/deb) e
    decidir, com atenção à privacidade, se/quando integrar o Wazuh para
    FIM e auditoria de usuário — ver
    [docs/local-agent-architecture.md](docs/local-agent-architecture.md).
+7. API de ingestão direta: TLS/proxy reverso, *rate limit* por chave e
+   amarrar cada chave de ingestão ao serviço que ela pode escrever (ver
+   "Segurança" em [docs/ingestion-modes.md](docs/ingestion-modes.md)).
 
 ## Licença
 

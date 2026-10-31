@@ -1,8 +1,13 @@
-# tracepilot-local-agent
+# tracepilot-local-agent — o coletor instalável
 
-Agente leve (Rust) instalado na máquina monitorada: coleta CPU, memória e
-disco e exporta via OTLP pro `otel-collector` do TracePilot — a mesma
-stack de telemetria que o `demo_app` já usa.
+O "TracePilot que se instala": agente leve (Rust) na máquina monitorada,
+coleta CPU, memória e disco e exporta via OTLP pro `otel-collector` do
+TracePilot — a mesma stack de telemetria que o `demo_app` já usa.
+
+> Este é o caminho **padrão** de ingestão. Quando a infra não permite
+> instalar nada, use a [API de ingestão direta](../ingest/), em que a
+> própria aplicação manda log/span — complementar, não substituta (ver
+> [docs/ingestion-modes.md](../docs/ingestion-modes.md)).
 
 Binário de release: ~2MB, sem dependência externa em runtime (não precisa
 de Python/JVM instalado na máquina monitorada).

@@ -1,0 +1,34 @@
+{
+  "service": "checkout-api",
+  "host": "pod-checkout-7f9c",
+  "environment": "dev",
+  "events": [
+    {
+      "kind": "span",
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "span_id": "00f067aa0ba902b7",
+      "operation": "POST /checkout",
+      "duration_ms": 134.5,
+      "status": "ERROR",
+      "http": {"method": "POST", "route": "/checkout", "status_code": 500},
+      "exception": {
+        "type": "ZeroDivisionError",
+        "message": "division by zero",
+        "stacktrace": "File \"app/checkout.py\", line 42, in checkout\n    unit = budget / quantity"
+      },
+      "attributes": {"order_id": "1", "quantity": 0}
+    },
+    {
+      "kind": "log",
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "span_id": "00f067aa0ba902b7",
+      "severity": "ERROR",
+      "message": "checkout falhou ao calcular preço unitário order_id=1 quantity=0",
+      "exception": {
+        "type": "ZeroDivisionError",
+        "message": "division by zero",
+        "stacktrace": "File \"app/checkout.py\", line 42, in checkout\n    unit = budget / quantity"
+      }
+    }
+  ]
+}

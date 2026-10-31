@@ -6,6 +6,14 @@
 > existem). Este documento mapeia o que já existe em open source pra cada
 > frente de monitoramento, o que vale construir do zero em Rust, e como
 > isso se conecta ao pipeline que já temos (OTel Collector → OpenObserve).
+>
+> Este é o **coletor instalável** — o "TracePilot que se instala". Ele é um
+> dos dois caminhos de ingestão: quando a infra não permite instalar nada
+> (PaaS, serverless, política de segurança do cliente), a aplicação manda
+> telemetria direto pela [API de ingestão](../ingest/), com um
+> [guia pronto para IA](ai-integration-guide.md) implementar o envio. Os
+> dois caminhos são complementares e terminam no mesmo pipeline — ver
+> [ingestion-modes.md](ingestion-modes.md).
 
 ## Por que não construir tudo do zero
 
@@ -129,7 +137,10 @@ máquina — inclusive a própria, de teste —:
 
 **Construído** (ver [`local-agent/`](../local-agent/)): o coletor de
 recursos em Rust (`sysinfo` → OTLP), por ser a parte sem implicação de
-privacidade/segurança e rápida de validar.
+privacidade/segurança e rápida de validar. E, do outro lado, o caminho que
+dispensa instalar qualquer coisa: a [API de ingestão direta](../ingest/),
+validada de ponta a ponta — é ela que mantém o TracePilot utilizável em
+infra onde este agente não pode rodar.
 
 **Fica como próximo passo deliberado** (não instalado nesta sessão): o
 Wazuh agent em si — é uma peça de infraestrutura de segurança real, que

@@ -182,6 +182,59 @@ uma falha controlada **determinística** (`ZeroDivisionError` quando
 `trace_id`/`span_id`) e exceção registrada no span — essa é a falha
 "canário" que o MVP já consegue investigar de ponta a ponta.
 
+## `ingest/` — API de ingestão direta (caminho sem instalador)
+
+Serviço FastAPI separado (`uvicorn ingest.main:app`, porta 8810) que
+recebe log/span em JSON simples da aplicação monitorada, traduz para OTLP
+e repassa ao `otel-collector`. É o segundo caminho de ingestão do
+TracePilot, complementar ao coletor instalável (`local-agent/`) — existe
+para infra onde não se pode instalar agente (PaaS, serverless, política de
+segurança) e para quem quer mandar só o essencial em vez de todo o log da
+máquina. Comparação dos modos em [ingestion-modes.md](ingestion-modes.md).
+
+| Rota | O que faz |
+|---|---|
+| `POST /v1/events` | Lote de eventos de um serviço → OTLP → collector. Responde `202` com as contagens aceitas e `warnings`. |
+| `GET /v1/guide` | Serve [ai-integration-guide.md](ai-integration-guide.md) em markdown — o contrato na versão desta instância. |
+| `GET /v1/health` | Status da API, do collector OTLP e se a autenticação está configurada. |
+
+| Arquivo | Conteúdo |
+|---|---|
+| `schema.py` | Contrato público (Pydantic): o JSON que a aplicação manda. |
+| `otlp.py` | Tradução para OTLP/JSON + `integration_warnings()`. |
+| `main.py` | Rotas, autenticação por chave, repasse ao collector. |
+
+Decisões de design:
+
+- **Schema mais simples que OTLP, não OTLP cru.** O público deste caminho
+  é justamente quem não pode adotar um SDK de OTel; exigir OTLP na mão
+  devolveria o integrador ao problema que ele não consegue resolver.
+- **Traduz para o pipeline existente, não cria outro.** A evidência que
+  entra pela API chega ao OpenObserve com os mesmos nomes de campo que
+  `openobserve_client.py` consulta — os agentes não distinguem a origem
+  (só o atributo `tracepilot.ingest_mode`, para auditoria).
+- **`warnings` na resposta.** `integration_warnings()` aponta o que falta
+  no lote para a investigação funcionar (log sem `trace_id`, span sem
+  `status=ERROR`, nenhum `exception.stacktrace`). É o que fecha o ciclo da
+  integração escrita por IA: manda lote de teste, lê os avisos, corrige —
+  sem precisar abrir o OpenObserve para conferir. Avisa, não bloqueia: o
+  lote é aceito de todo jeito.
+- **Processo separado do `webapp/`.** Plano de dados (tráfego da aplicação
+  do cliente, possivelmente exposto) versus plano de controle (painel do
+  operador) — um processo só daria ao primeiro a superfície de ataque do
+  segundo.
+- **Só escrita de telemetria.** Não lê investigação nem consulta
+  OpenObserve — mesmo raciocínio do `OpenObserveClient`, que só expõe
+  leitura.
+
+Validado de ponta a ponta contra a stack real: lote com um span de erro e
+um log correlacionado enviado por `POST /v1/events` chegou ao OpenObserve
+com `body`, `severity`, `trace_id`, `span_id`, `service_name`,
+`exception_type/message/stacktrace`, `operation_name`, `span_status`,
+`http_route`, `http_status_code`, `duration` e `events` — conferido por
+consulta via `OpenObserveClient`. Pendente: TLS, *rate limit* por chave e
+amarrar cada chave ao `service` que pode escrever.
+
 ## `docker-compose.yml` + `otel-collector-config.yaml`
 
 Sobe `openobserve` (armazenamento/consulta de telemetria) e
@@ -221,3 +274,5 @@ python3 agents/orchestrator.py "checkout falhando com erro 500" \
 3. Validar `query_metrics` contra uma fonte real de métricas.
 4. Persistir o relatório em `reports/` (hoje só vai para stdout).
 5. Harness de avaliação com OpenRCA em `benchmark/`.
+6. Endurecer `ingest/` para produção: TLS/proxy reverso, *rate limit* por
+   chave e vínculo chave → `service` autorizado.
