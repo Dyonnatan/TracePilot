@@ -15,10 +15,14 @@
   "related_services": [
     "payment-service"
   ],
-  "repo_url": "https://github.com/apex-space/loja-apex",
-  "repo_local_path": "demo_app",
   "otlp_endpoint": "localhost:4317",
   "setup_title": "Suba a loja Apex Space com a telemetria",
   "setup_commands": "git switch feat/reference-environment\ncd demo_app && make up",
-  "setup_notes": "Loja: localhost:8088 · Painel de falhas: localhost:8090"
+  "setup_notes": "Loja: localhost:8088 · Painel de falhas: localhost:8090",
+  "repos": [
+    {
+      "url": "https://github.com/apex-space/loja-apex",
+      "local_path": "demo_app"
+    }
+  ]
 }

@@ -58,11 +58,20 @@ def _parse(text: str) -> tuple[str, list[str]]:
 
 
 def run(state: dict, llm: LLMProvider) -> dict:
+    hypotheses = state.get("hypotheses", "(nenhuma hipótese gerada)")
+    notes = state.get("verification_notes", "(não executada)")
+    if not state.get("verified") and state.get("best_guess"):
+        # A verificação não fechou, mas a investigação aprofundada chegou a
+        # um melhor palpite: é ele que vai para a pessoa (marcado como
+        # palpite na tela), não um "não sabemos".
+        hypotheses = (
+            f"Melhor palpite após investigação aprofundada: {state['best_guess']}\n"
+            f"Motivo: {state.get('best_guess_reason', '')}\n"
+            f"Ação sugerida: {state.get('best_guess_action', '')}"
+        )
+        notes = "Palpite com confiança de " + str(state.get("best_guess_confidence") or "?") + "%, baseado na linha do tempo e na cadeia de spans."
     raw = llm.generate(
-        prompt=PROMPT_TEMPLATE.format(
-            hypotheses=state.get("hypotheses", "(nenhuma hipótese gerada)"),
-            verification_notes=state.get("verification_notes", "(não executada)"),
-        ),
+        prompt=PROMPT_TEMPLATE.format(hypotheses=hypotheses, verification_notes=notes),
         system=SYSTEM_PROMPT,
     )
     cause, actions = _parse(raw)

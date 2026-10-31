@@ -1,30 +1,13 @@
 {% extends "onboarding_base.html" %}
 {% block title %}Análise · TracePilot{% endblock %}
 {% block step %}
-{% set res = {} %}
-{% for r in state.resources %}{% set _ = res.update({r.key: r}) %}{% endfor %}
-{% macro row(k, v, warn=False) %}
-<li class="{{ 'is-warn' if warn }}"><span class="s"></span><span class="k">{{ k }}</span><span class="v"><span class="pending">…</span><span class="result">{{ v }}</span></span></li>
-{% endmacro %}
 <h1>Analisando o servidor</h1>
-<p class="lead">Identificando a máquina e o sistema.</p>
+<p class="lead">Identificando a máquina, o sistema e a segurança.</p>
 <div class="scan-bar"><div data-scan-bar></div></div>
 <p class="scan-status" data-scan-label>iniciando</p>
 <ul class="scan" data-scan>
-  {{ row('Máquina', snapshot.host_name.value or 'não identificada') }}
-  {{ row('Processador', (snapshot.cpu.core_count.value or '—') ~ ' núcleos · ' ~ res.cpu.display ~ ' em uso') }}
-  {{ row('Memória', res.memory.detail or 'sem dado') }}
-  {{ row('Disco', res.disk.display ~ ' usado · ' ~ (res.disk.detail or ''), res.disk.status in ('warn', 'down')) }}
-  {{ row('Placa de vídeo', snapshot.gpu.name or 'nenhuma') }}
-  {{ row('Rede', res.network.detail) }}
-  {{ row(profile.system_name or 'Sistema', ('no ar · ' ~ (demo_app.latency_ms | round | int) ~ ' ms') if demo_app.up else 'não respondeu', not demo_app.up) }}
-  {{ row('Conexão', state.connection.text ~ (' · ' ~ state.connection.via if state.connection.via else ''), state.connection.status != 'ok') }}
-  {{ row('Tecnologias', ((repo_info.languages or {}).keys() | list)[:5] | join(', ') if repo_info and repo_info.analyzed else 'sem repositório') }}
-  {% set sec = profile.security_scan or {'findings': []} %}
-  {% for area, label in [('código', 'Segurança do código'), ('site', 'Segurança do site'), ('servidor', 'Portas expostas')] %}
-    {% set fs = sec.findings | selectattr('area', 'equalto', area) | list %}
-    {% set urgent = fs | selectattr('severity', 'in', ['critical', 'high']) | list %}
-    {{ row(label, ('nenhum problema' if not fs else (fs | length) ~ ' problema' ~ ('s' if fs | length > 1 else '') ~ (' · ' ~ (urgent | length) ~ ' urgente' ~ ('s' if urgent | length > 1 else '') if urgent else '')), urgent | length > 0) }}
+  {% for r in rows %}
+  <li class="{{ 'is-warn' if r.warn }}"><span class="s"></span><span class="k">{{ r.label }}</span><span class="v"><span class="pending">…</span><span class="result">{{ r.value }}</span></span></li>
   {% endfor %}
 </ul>
 <div class="actions"><a href="/onboarding/summary" class="btn btn-lg hidden" id="continue-link">Ver resumo</a></div>
@@ -39,15 +22,17 @@
       if (i > 0) items[i - 1].classList.replace('is-running', 'is-done');
       if (i === items.length) {
         bar.style.width = '100%';
-        label.textContent = 'concluído';
+        label.textContent = 'concluído · abrindo o resumo';
         document.getElementById('continue-link').classList.remove('hidden');
+        // Avança sozinho; o botão fica para quem quiser ir antes.
+        setTimeout(() => { window.location.href = '/onboarding/summary'; }, 1400);
         return;
       }
       items[i].classList.add('is-visible', 'is-running');
       label.textContent = items[i].querySelector('.k').textContent.toLowerCase() + '…';
       bar.style.width = `${(i / items.length) * 100}%`;
       i += 1;
-      setTimeout(next, 450 + Math.random() * 300);
+      setTimeout(next, 380 + Math.random() * 250);
     }
     next();
   })();

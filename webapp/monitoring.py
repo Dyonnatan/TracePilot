@@ -171,7 +171,8 @@ SOURCES_LIMIT = 200  # mesmo limite de OpenObserveClient.recent_sources
 API_NAME = "TracePilot API"
 
 
-def _connection(openobserve_up: bool, agent_reporting: bool, sources: dict | None, api_service: dict | None) -> dict:
+def _connection(openobserve_up: bool, agent_reporting: bool, sources: dict | None, api_service: dict | None,
+                storage_auth: bool = True) -> dict:
     """Como os dados chegam ao TracePilot, separado pelos dois caminhos:
 
     - TracePilot Collector: agente instalado no servidor (recursos da máquina).
@@ -202,12 +203,14 @@ def _connection(openobserve_up: bool, agent_reporting: bool, sources: dict | Non
         api = {"name": API_NAME, "status": "unknown", "text": "sem dados",
                "detail": "logs, erros e rastros da aplicação"
                          + ("" if api_up is None else (" · endpoint no ar" if api_up else " · endpoint desligado"))}
-    storage = {
-        "name": "Armazenamento",
-        "status": "ok" if openobserve_up else "down",
-        "text": "online" if openobserve_up else "indisponível",
-        "detail": "OpenObserve",
-    }
+    if openobserve_up and storage_auth:
+        storage = {"name": "Armazenamento", "status": "ok", "text": "online", "detail": "OpenObserve"}
+    elif openobserve_up:
+        storage = {"name": "Armazenamento", "status": "warn", "text": "senha recusada",
+                   "detail": "OpenObserve no ar; confira OPENOBSERVE_USER/PASSWORD no .env"}
+    else:
+        storage = {"name": "Armazenamento", "status": "down", "text": "fora do ar",
+                   "detail": "OpenObserve · suba com: docker compose up -d"}
 
     channels = [c["name"].replace("TracePilot ", "") for c in (collector, api) if c["status"] == "ok"]
     via = " + ".join(channels)
@@ -298,7 +301,8 @@ def build_state(
     ]
 
     # ---- TracePilot (conexão) ------------------------------------------
-    conn = _connection(openobserve.get("up", False), agent_reporting, sources, api_service)
+    conn = _connection(openobserve.get("up", False), agent_reporting, sources, api_service,
+                       storage_auth=openobserve.get("auth", True))
     tp_facts = [(c["name"], c["text"]) for c in (conn["collector"], conn["api"], conn["storage"])]
     if conn["status"] == "down":
         alerts.append({

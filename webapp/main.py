@@ -15,6 +15,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
+from dotenv import load_dotenv
+
+# .env da raiz (se existir): credenciais do OpenObserve, LLM etc. Sem isso,
+# o painel iniciado com `uvicorn` direto não enxergava a configuração.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -127,16 +132,17 @@ def _demo_app_status() -> dict:
 
 
 def _openobserve_status() -> dict:
-    """Uma falha isolada (timeout, OpenObserve ocupado) não basta para
-    declarar o armazenamento fora do ar — tenta de novo antes."""
-    for attempt in range(2):
-        try:
-            streams = OpenObserveClient().list_streams()
-            return {"up": True, "streams": streams, "url": OPENOBSERVE_UI_URL}
-        except Exception:
-            if attempt == 0:
-                time.sleep(0.3)
-    return {"up": False, "streams": [], "url": OPENOBSERVE_UI_URL}
+    """"No ar" vem do /healthz (leve, sem senha); listar streams só diz se
+    as credenciais são aceitas. Separado para a tela não confundir
+    "credencial errada" com "fora do ar"."""
+    client = OpenObserveClient()
+    up = client.health() or (time.sleep(0.3) or client.health())
+    if not up:
+        return {"up": False, "auth": False, "streams": [], "url": OPENOBSERVE_UI_URL}
+    try:
+        return {"up": True, "auth": True, "streams": client.list_streams(), "url": OPENOBSERVE_UI_URL}
+    except Exception:
+        return {"up": True, "auth": False, "streams": [], "url": OPENOBSERVE_UI_URL}
 
 
 def _ingest_api_status() -> dict:
@@ -215,7 +221,8 @@ def _traffic_threats() -> dict | None:
 
 def _run_security_scan() -> dict:
     profile = workspace_store.load()
-    result = security_scan.scan(app_url=_app_url(), repo_path=profile.get("repo_local_path"))
+    paths = profile.get("repo_local_paths") or ([profile["repo_local_path"]] if profile.get("repo_local_path") else [])
+    result = security_scan.scan(app_url=_app_url(), repo_paths=paths)
     for f in result["findings"]:
         f["prompt"] = security_scan.fix_prompt(f, profile.get("system_name"))
     workspace_store.update(security_scan=result)
@@ -336,17 +343,31 @@ def onboarding_repo_form(request: Request):
 
 
 @app.post("/onboarding/repo")
-def onboarding_repo_submit(request: Request, repo_url: str = Form("")):
+def onboarding_repo_submit(request: Request, repo_url: list[str] = Form(default=[])):
+    """Um ou vários repositórios (ex.: front-end, API, serviço de
+    pagamento). Cada um é analisado (GitHub, ou a cópia local que o preset
+    indicar); as linguagens são somadas e a análise de segurança varre o
+    código de todas as cópias locais."""
     guard = _onboarding_guard(request)
     if guard:
         return guard
-    repo_url = repo_url.strip()
-    local_path = None
-    preset = presets.active() or {}
-    if repo_url and preset.get("repo_local_path") and repo_url.rstrip("/") == preset.get("repo_url", "").rstrip("/"):
-        local_path = str(BASE_DIR.parent / preset["repo_local_path"])
-    repo_info = github_inspector.inspect_repo(repo_url, local_path=local_path) if repo_url else None
-    workspace_store.update(repo_url=repo_url or None, repo_info=repo_info, repo_local_path=local_path)
+    urls = list(dict.fromkeys(u.strip() for u in repo_url if u and u.strip()))
+    infos, local_paths = [], []
+    for url in urls:
+        rel = presets.local_path_for(url)
+        local = str(BASE_DIR.parent / rel) if rel else None
+        info = github_inspector.inspect_repo(url, local_path=local)
+        infos.append(info)
+        if local and info.get("source") == "local":
+            local_paths.append(local)
+    workspace_store.update(
+        repo_urls=urls,
+        repo_url=urls[0] if urls else None,
+        repo_infos=infos,
+        repo_info=github_inspector.merge(infos) if infos else None,
+        repo_local_paths=local_paths,
+        repo_local_path=local_paths[0] if local_paths else None,
+    )
     return RedirectResponse(url="/onboarding/connectivity", status_code=303)
 
 
@@ -361,6 +382,44 @@ def onboarding_connectivity(request: Request):
     )
 
 
+def _analysis_rows(state: dict, snapshot: dict, profile: dict, demo_app: dict) -> list[dict]:
+    """Linhas da etapa "Análise" — calculadas uma vez e salvas no perfil,
+    para o resumo mostrar exatamente o que a análise encontrou."""
+    res = {r["key"]: r for r in state["resources"]}
+    repo_info = profile.get("repo_info") or {}
+    sec = profile.get("security_scan") or {"findings": []}
+    conn = state["connection"]
+
+    def row(label, value, warn=False):
+        return {"label": label, "value": value, "warn": bool(warn)}
+
+    rows = [
+        row("Máquina", snapshot["host_name"].get("value") or "não identificada"),
+        row("Processador", f"{snapshot['cpu']['core_count'].get('value') or '—'} núcleos · {res['cpu']['display']} em uso"),
+        row("Memória", res["memory"]["detail"] or "sem dado"),
+        row("Disco", f"{res['disk']['display']} usado · {res['disk']['detail']}", res["disk"]["status"] in ("warn", "down")),
+        row("Placa de vídeo", (snapshot.get("gpu") or {}).get("name") or "nenhuma"),
+        row("Rede", res["network"]["detail"]),
+        row(profile.get("system_name") or "Sistema",
+            f"no ar · {demo_app['latency_ms']:.0f} ms" if demo_app.get("up") else "não respondeu",
+            not demo_app.get("up")),
+        row("Conexão", conn["text"] + (f" · {conn['via']}" if conn["via"] else ""), conn["status"] != "ok"),
+        row("Tecnologias", ", ".join(list((repo_info.get("languages") or {}).keys())[:5])
+            if repo_info.get("analyzed") else "sem repositório"),
+    ]
+    for area, label in (("código", "Segurança do código"), ("site", "Segurança do site"), ("servidor", "Portas expostas")):
+        fs = [f for f in sec.get("findings", []) if f["area"] == area]
+        urgent = [f for f in fs if f["severity"] in ("critical", "high")]
+        if not fs:
+            value = "nenhum problema"
+        else:
+            value = f"{len(fs)} problema{'s' if len(fs) > 1 else ''}"
+            if urgent:
+                value += f" · {len(urgent)} urgente{'s' if len(urgent) > 1 else ''}"
+        rows.append(row(label, value, bool(urgent)))
+    return rows
+
+
 @app.get("/onboarding/configuring")
 def onboarding_configuring(request: Request):
     guard = _onboarding_guard(request)
@@ -371,17 +430,11 @@ def onboarding_configuring(request: Request):
     workspace_store.update(host_snapshot=snapshot)
     _run_security_scan()
     profile = workspace_store.load()
+    demo_app = _demo_app_status()
+    rows = _analysis_rows(_collect_state(snapshot), snapshot, profile, demo_app)
+    workspace_store.update(analysis_rows=rows)
     return templates.TemplateResponse(
-        request,
-        "onboarding_configuring.html",
-        {
-            "step_index": 5,
-            "snapshot": snapshot,
-            "state": _collect_state(snapshot),
-            "profile": profile,
-            "repo_info": profile.get("repo_info"),
-            "demo_app": _demo_app_status(),
-        },
+        request, "onboarding_configuring.html", {"step_index": 5, "rows": rows}
     )
 
 
@@ -551,6 +604,7 @@ def create_investigation(
             "error_report": error_report,
             "service": service,
             "investigation_id": investigation_id,
+            "related_services": [s for s in _monitored_services() if s != service],
         },
         daemon=True,
     )

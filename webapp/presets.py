@@ -24,7 +24,6 @@ FORM_FIELDS = (
     "environment",
     "app_url",
     "service_name",
-    "repo_url",
 )
 
 
@@ -46,6 +45,26 @@ def active() -> dict | None:
     return _load(name)
 
 
+def repos(preset: dict | None = None) -> list[dict]:
+    """Repositórios do preset como lista de {url, local_path}. Aceita o
+    formato antigo (repo_url + repo_local_path) para não quebrar presets."""
+    preset = active() if preset is None else preset
+    preset = preset or {}
+    if preset.get("repos"):
+        return [r for r in preset["repos"] if r.get("url")]
+    if preset.get("repo_url"):
+        return [{"url": preset["repo_url"], "local_path": preset.get("repo_local_path")}]
+    return []
+
+
+def local_path_for(url: str) -> str | None:
+    url = url.rstrip("/")
+    for r in repos():
+        if r["url"].rstrip("/") == url:
+            return r.get("local_path")
+    return None
+
+
 def form_values(profile: dict) -> dict:
     """Valores para preencher os formulários: o que está no perfil, e o
     preset onde o perfil ainda está vazio."""
@@ -54,4 +73,10 @@ def form_values(profile: dict) -> dict:
     for field in FORM_FIELDS:
         current = profile.get(field)
         values[field] = current if current not in (None, "") else preset.get(field, "")
+    values["repo_urls"] = (
+        profile.get("repo_urls")
+        or ([profile["repo_url"]] if profile.get("repo_url") else None)
+        or [r["url"] for r in repos(preset)]
+        or [""]
+    )
     return values

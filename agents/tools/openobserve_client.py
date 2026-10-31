@@ -16,6 +16,10 @@ import time
 import httpx
 
 
+DEV_DEFAULT_USER = "admin@tracepilot.local"
+DEV_DEFAULT_PASSWORD = "ChangeMe123!"
+
+
 class OpenObserveClient:
     def __init__(self, base_url: str | None = None, org: str | None = None, token: str | None = None):
         self.base_url = (base_url or os.getenv("OPENOBSERVE_URL", "http://localhost:5080")).rstrip("/")
@@ -31,10 +35,19 @@ class OpenObserveClient:
         password = os.getenv("OPENOBSERVE_PASSWORD")
         if user and password:
             return headers, (user, password)
-        raise RuntimeError(
-            "Nenhuma credencial do OpenObserve configurada: defina "
-            "OPENOBSERVE_TOKEN, ou OPENOBSERVE_USER + OPENOBSERVE_PASSWORD no .env."
-        )
+        # Sem nada configurado: as credenciais de desenvolvimento do
+        # docker-compose.yml da raiz (ZO_ROOT_USER_*). Antes isto levantava
+        # erro e o painel, iniciado sem .env, mostrava o armazenamento como
+        # "indisponível" mesmo com o OpenObserve no ar. Em produção, defina
+        # OPENOBSERVE_TOKEN ou USER/PASSWORD.
+        return headers, (DEV_DEFAULT_USER, DEV_DEFAULT_PASSWORD)
+
+    def health(self) -> bool:
+        """O servidor está no ar? `/healthz` não exige autenticação."""
+        try:
+            return httpx.get(f"{self.base_url}/healthz", timeout=5).status_code == 200
+        except httpx.HTTPError:
+            return False
 
     def list_streams(self) -> list[dict]:
         """Lista os streams existentes (nome, tipo, nº de documentos) — usado

@@ -304,13 +304,18 @@ def _scan_ports() -> list[dict]:
     return findings
 
 
-def scan(app_url: str | None = None, repo_path: str | None = None) -> dict:
+def scan(app_url: str | None = None, repo_path: str | None = None, repo_paths: list[str] | None = None) -> dict:
     findings: list[dict] = []
     checks = []
-    if repo_path and Path(repo_path).is_dir():
+    paths = [p for p in (repo_paths or ([repo_path] if repo_path else [])) if p and Path(p).is_dir()]
+    for path in paths:
         try:
-            findings += _scan_code(Path(repo_path))
-            checks.append({"area": "código", "ok": True, "detail": Path(repo_path).name + "/"})
+            code = _scan_code(Path(path))
+            if len(paths) > 1:  # vários repositórios: diz de qual veio
+                for f in code:
+                    f["where"] = f"{Path(path).name}/{f['where']}"
+            findings += code
+            checks.append({"area": "código", "ok": True, "detail": Path(path).name + "/"})
         except Exception as exc:  # noqa: BLE001 — uma frente não derruba as outras
             checks.append({"area": "código", "ok": False, "detail": str(exc)[:80]})
     if app_url:

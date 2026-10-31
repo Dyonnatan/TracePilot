@@ -149,3 +149,36 @@ def _inspect_github(repo_url: str) -> dict:
         "source": "github",
         "checked_at": time.time(),
     }
+
+
+def merge(infos: list[dict]) -> dict:
+    """Junta a análise de vários repositórios: soma as linguagens e mantém
+    a lista por repositório (para a tela mostrar cada um)."""
+    analyzed = [i for i in infos if i.get("analyzed")]
+    languages: dict[str, int] = {}
+    for info in analyzed:
+        for lang, size in (info.get("languages") or {}).items():
+            languages[lang] = languages.get(lang, 0) + size
+    first = (analyzed or infos)[0]
+    return {
+        "analyzed": bool(analyzed),
+        "reason": None if analyzed else first.get("reason"),
+        "count": len(infos),
+        "owner": first.get("owner"),
+        "name": first.get("name"),
+        "source": "local" if analyzed and all(i.get("source") == "local" for i in analyzed) else "github",
+        "languages": languages,
+        "primary_language": max(languages, key=languages.get) if languages else None,
+        "repos": [
+            {
+                "url": i.get("repo_url"),
+                "label": f"{i['owner']}/{i['name']}" if i.get("owner") else i.get("repo_url"),
+                "analyzed": bool(i.get("analyzed")),
+                "source": i.get("source"),
+                "reason": i.get("reason"),
+                "primary_language": i.get("primary_language"),
+            }
+            for i in infos
+        ],
+        "checked_at": time.time(),
+    }

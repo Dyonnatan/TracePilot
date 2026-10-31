@@ -1,15 +1,47 @@
 {% extends "onboarding_base.html" %}
-{% block title %}Repositório · TracePilot{% endblock %}
+{% block title %}Repositórios · TracePilot{% endblock %}
 {% block step %}
-<h1>Repositório</h1>
-<p class="lead">Opcional. Com o código, o TracePilot identifica as tecnologias.</p>
+<h1>Repositórios</h1>
+<p class="lead">Opcional. Um ou vários: front-end, API, serviços. Com o código, o TracePilot identifica as tecnologias e checa a segurança.</p>
 <form method="post" action="/onboarding/repo" class="form">
-  <label class="field"><span>Link do GitHub</span>
-    <input type="url" name="repo_url" value="{{ form.repo_url or '' }}" placeholder="https://github.com/sua-conta/seu-repo">
-  </label>
+  <div class="field"><span>Links do GitHub</span>
+    <div class="repo-list" data-repo-list>
+      {% for url in form.repo_urls %}
+      <div class="repo-row">
+        <input type="url" name="repo_url" value="{{ url }}" placeholder="https://github.com/sua-conta/seu-repo" aria-label="Link do repositório">
+        <button type="button" class="btn-line btn-sm" data-repo-remove aria-label="Remover">Remover</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="link-button repo-add" data-repo-add>+ Adicionar outro repositório</button>
+  </div>
   <div class="actions">
     <button type="submit" class="btn-lg">Continuar</button>
-    <button type="submit" class="btn-line btn-lg" name="skip" value="1" formnovalidate onclick="this.form.repo_url.value=''">Pular</button>
+    <button type="submit" class="btn-line btn-lg" formnovalidate data-repo-skip>Pular</button>
   </div>
 </form>
+<script>
+  (function () {
+    const list = document.querySelector('[data-repo-list]');
+    function sync() {
+      const rows = list.querySelectorAll('.repo-row');
+      rows.forEach((r) => { r.querySelector('[data-repo-remove]').hidden = rows.length === 1; });
+    }
+    document.querySelector('[data-repo-add]').addEventListener('click', () => {
+      const row = list.querySelector('.repo-row').cloneNode(true);
+      row.querySelector('input').value = '';
+      list.appendChild(row);
+      sync();
+      row.querySelector('input').focus();
+    });
+    list.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-repo-remove]');
+      if (btn) { btn.closest('.repo-row').remove(); sync(); }
+    });
+    document.querySelector('[data-repo-skip]').addEventListener('click', () => {
+      list.querySelectorAll('input').forEach((i) => { i.value = ''; });
+    });
+    sync();
+  })();
+</script>
 {% endblock %}

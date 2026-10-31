@@ -18,7 +18,7 @@ from agents.llm import get_provider
 from agents.llm.decision_provider import DecisionProvider
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.specialists import logs_agent, metrics_agent, traces_agent
-from agents import diagnosis_agent, verifier_agent, plain_summary_agent
+from agents import deep_dive_agent, diagnosis_agent, verifier_agent, plain_summary_agent
 from agents.report import build_report
 from agents.fix_prompt import build_fix_prompt
 from agents import report_store
@@ -27,6 +27,7 @@ from agents import report_store
 class IncidentState(TypedDict, total=False):
     error_report: str
     service: str
+    related_services: list
     trace_id: str
     metric_name: str
     start_time: int
@@ -46,6 +47,14 @@ class IncidentState(TypedDict, total=False):
     plain_actions: list
     fix_prompt: str
     report: str
+    timeline: list
+    timeline_facts: dict
+    deep_dive_digest: str
+    error_origin: dict
+    best_guess: str
+    best_guess_confidence: int | None
+    best_guess_reason: str
+    best_guess_action: str
 
 
 def orchestrator_node(state: IncidentState) -> IncidentState:
@@ -73,6 +82,7 @@ def build_graph() -> StateGraph:
     graph.add_node("traces_agent", lambda s: traces_agent.run(s, llm, client))
     graph.add_node("diagnosis_agent", lambda s: diagnosis_agent.run(s, llm))
     graph.add_node("verifier_agent", lambda s: verifier_agent.run(s, llm, decision))
+    graph.add_node("deep_dive_agent", lambda s: deep_dive_agent.run(s, llm, client))
     graph.add_node("plain_summary_agent", lambda s: plain_summary_agent.run(s, llm))
     graph.add_node("report", report_node)
 
@@ -86,7 +96,10 @@ def build_graph() -> StateGraph:
     graph.add_edge("metrics_agent", "traces_agent")
     graph.add_edge("traces_agent", "diagnosis_agent")
     graph.add_edge("diagnosis_agent", "verifier_agent")
-    graph.add_edge("verifier_agent", "plain_summary_agent")
+    # Aprofundamento sempre: monta a linha do tempo entre serviços e, se o
+    # verificador não aceitou o diagnóstico, produz o melhor palpite.
+    graph.add_edge("verifier_agent", "deep_dive_agent")
+    graph.add_edge("deep_dive_agent", "plain_summary_agent")
     graph.add_edge("plain_summary_agent", "report")
     graph.add_edge("report", END)
 
@@ -100,6 +113,7 @@ def run_investigation(
     metric_name: str = "duration",
     window_minutes: int = 60,
     investigation_id: str | None = None,
+    related_services: list[str] | None = None,
 ) -> dict:
     """Roda uma investigação completa e persiste o resultado em `reports/`.
 
@@ -117,6 +131,7 @@ def run_investigation(
         "metric_name": metric_name,
         "start_time": start_us,
         "end_time": now_us,
+        "related_services": related_services or [],
     }
     if trace_id:
         initial_state["trace_id"] = trace_id

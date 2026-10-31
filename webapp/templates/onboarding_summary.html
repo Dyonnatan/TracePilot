@@ -5,7 +5,16 @@
 {% set res = {} %}
 {% for r in state.resources %}{% set _ = res.update({r.key: r}) %}{% endfor %}
 <h1>Tudo pronto.</h1>
-<p class="lead">{{ profile.system_name or 'Seu sistema' }} está sendo observado.</p>
+<p class="lead">{{ profile.system_name or 'Seu sistema' }} está conectado. Inicie o monitoramento e a IA passa a vigiar 24 horas.</p>
+
+{% if profile.analysis_rows %}
+<section class="card">
+  <div class="section-head"><span class="label">O que a análise encontrou</span></div>
+  <dl class="kv kv-2col">
+    {% for r in profile.analysis_rows %}<dt>{{ r.label }}</dt><dd class="{{ 'st-warn' if r.warn }}">{{ r.value }}</dd>{% endfor %}
+  </dl>
+</section>
+{% endif %}
 
 <div class="facts-grid">
   <div>
@@ -27,22 +36,20 @@
     </dl>
   </div>
   <div>
-    <span class="label">Servidor</span>
-    <dl class="kv">
-      <dt>Máquina</dt><dd>{{ state.nodes.infra.subtitle }}</dd>
-      {% for key in ['cpu', 'memory', 'disk'] %}{% set r = res[key] %}
-      <dt>{{ r.label }}</dt><dd class="st-{{ r.status if r.status in ('warn','down') }}">{{ r.display }}</dd>
-      {% endfor %}
-    </dl>
-  </div>
-  <div>
     <span class="label">Tecnologias</span>
     {% if state.tech %}
     <div class="tech-bar">{% for t in state.tech %}<span class="tech-c{{ loop.index0 }}" style="width: {{ t.percent }}%" title="{{ t.name }}"></span>{% endfor %}</div>
     <ul class="tech-legend">{% for t in state.tech %}<li><i class="tech-c{{ loop.index0 }}"></i>{{ t.name }} <span class="muted mono small">{{ '<1' if t.percent < 1 else (t.percent | round | int) }}%</span></li>{% endfor %}</ul>
-    {% if repo_info and repo_info.source == 'local' %}<p class="muted small" style="margin:.6rem 0 0">Analisado pela cópia local.</p>{% endif %}
     {% else %}
     <p class="muted small" style="margin:0">Sem repositório.</p>
+    {% endif %}
+    {% if repo_info and repo_info.repos %}
+    <ul class="repo-items">
+      {% for r in repo_info.repos %}
+      <li><span class="mono">{{ r.label | replace('https://github.com/', '') }}</span>
+        <span class="{{ 'muted' if r.analyzed else 'text-warn' }} small">{{ ('cópia local' if r.source == 'local' else 'GitHub') if r.analyzed else ('privado' if r.reason == 'not_found' else 'não analisado') }}</span></li>
+      {% endfor %}
+    </ul>
     {% endif %}
   </div>
 </div>
@@ -78,8 +85,8 @@
 </section>
 
 <div class="actions">
-  <form method="post" action="/onboarding/complete"><button type="submit" class="btn-lg">Abrir painel</button></form>
-  <a href="/onboarding/about" class="btn btn-line btn-lg">Revisar</a>
+  <form method="post" action="/onboarding/complete"><button type="submit" class="btn-lg btn-go"><span class="go-dot"></span>Iniciar monitoramento</button></form>
+  <form method="post" action="/onboarding/reset"><button type="submit" class="btn-line btn-lg">Recomeçar</button></form>
 </div>
 <script src="/static/app.js"></script>
 {% endblock %}

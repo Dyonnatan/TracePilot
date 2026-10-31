@@ -29,9 +29,23 @@ def build_fix_prompt(state: dict) -> str:
         f"Relato original do problema: {state.get('error_report', '(não informado)')}",
         f"Serviço: {state.get('service', '(não informado)')}",
         "",
-        "Diagnóstico (causa provável, já verificada contra a evidência):",
-        state.get("hypotheses", "(nenhuma hipótese gerada)"),
+        "Diagnóstico (causa provável, já verificada contra a evidência):"
+        if state.get("verified") or not state.get("best_guess")
+        else f"Melhor palpite (confiança {state.get('best_guess_confidence') or '?'}%, após investigação aprofundada):",
+        state.get("hypotheses", "(nenhuma hipótese gerada)")
+        if state.get("verified") or not state.get("best_guess")
+        else f"{state['best_guess']}\nPor quê: {state.get('best_guess_reason', '')}",
     ]
+    origin = state.get("error_origin")
+    if origin:
+        exc = origin.get("exception") or {}
+        parts += [
+            "",
+            "Origem do erro (span mais profundo que falhou, seguindo o rastro entre serviços):",
+            " → ".join(origin.get("chain") or []),
+            f"{origin.get('service')}:{origin.get('operation')}"
+            + (f" lançou {exc.get('type')}: {exc.get('message')}" if exc else ""),
+        ]
 
     if error_log:
         parts += [
