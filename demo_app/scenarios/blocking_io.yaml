@@ -1,0 +1,37 @@
+name: blocking_io
+title: I/O síncrono travando o event loop do shop-api
+category: performance_antipattern
+culprit_component: shop-api (feature flag audit_sync_write, middleware de auditoria)
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: fault_flag
+  params:
+    target: shop
+    flag: audit_sync_write
+    config:
+      sleep_ms: 150
+
+user_symptom: >
+  Todas as páginas e ações da loja ficam mais lentas ao mesmo tempo, sem
+  erro. Com mais de um usuário navegando, a lentidão piora.
+
+expected_signals:
+  traces:
+    - Todo span servidor do shop-api ganha um filho audit.write de ~150 ms, antes do handler.
+    - Requisições concorrentes ficam em fila; o tempo total cresce mais que 150 ms quando há paralelismo.
+  logs:
+    - shop-api loga "change.event" com change.type=feature_flag e change.flag=audit_sync_write.
+  metrics:
+    - Latência HTTP de todas as rotas do shop-api sobe por igual; taxa de erro continua zero.
+    - CPU do shop-api baixa (o processo está esperando, não calculando).
+
+root_cause: >
+  A feature flag audit_sync_write ligou uma escrita de auditoria síncrona
+  (bloqueante) dentro de um middleware async. Ela trava o event loop do
+  uvicorn e serializa as requisições do shop-api.
+
+red_herrings:
+  - Banco e payment-service estão normais; os spans deles não mudam.
+  - Parece falta de CPU, mas a CPU está ociosa.

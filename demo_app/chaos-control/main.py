@@ -13,27 +13,50 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from drivers import CpuBurnDriver, DeployDriver, ManualActionRequired, PgLockDriver, ToxiproxyDriver
+from drivers import (
+    CompositeDriver,
+    CpuBurnDriver,
+    DeployDriver,
+    Driver,
+    FaultFlagDriver,
+    ManualActionRequired,
+    PgIndexDriver,
+    PgLockDriver,
+    ToxiproxyDriver,
+)
 from runner import ScenarioRunner, UnknownScenario
 from scenarios import load_scenarios
 
 SCENARIOS_DIR = Path(os.getenv("SCENARIOS_DIR", Path(__file__).parent.parent / "scenarios"))
 TOXIPROXY_URL = os.getenv("TOXIPROXY_URL", "http://localhost:8474")
 PAYMENT_INTERNAL_URL = os.getenv("PAYMENT_INTERNAL_URL", "http://localhost:8001")
+SHOP_INTERNAL_URL = os.getenv("SHOP_INTERNAL_URL", "http://localhost:8081")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://shop:shop@localhost:5432/shop")
 STATIC_DIR = Path(__file__).parent / "static"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 
-def build_runner() -> ScenarioRunner:
-    drivers = {
+def build_drivers() -> dict[str, Driver]:
+    drivers: dict[str, Driver] = {
         "toxiproxy": ToxiproxyDriver(httpx.Client(base_url=TOXIPROXY_URL, timeout=5)),
         "pg_lock": PgLockDriver(DATABASE_URL),
         "cpu_burn": CpuBurnDriver(httpx.Client(base_url=PAYMENT_INTERNAL_URL, timeout=10)),
         "deploy": DeployDriver(),
+        "fault_flag": FaultFlagDriver(
+            {
+                "shop": httpx.Client(base_url=SHOP_INTERNAL_URL, timeout=5),
+                "payment": httpx.Client(base_url=PAYMENT_INTERNAL_URL, timeout=5),
+            }
+        ),
+        "pg_index": PgIndexDriver(DATABASE_URL),
     }
-    return ScenarioRunner(load_scenarios(SCENARIOS_DIR), drivers)
+    drivers["composite"] = CompositeDriver(drivers)
+    return drivers
+
+
+def build_runner() -> ScenarioRunner:
+    return ScenarioRunner(load_scenarios(SCENARIOS_DIR), build_drivers())
 
 
 @asynccontextmanager

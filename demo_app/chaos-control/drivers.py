@@ -1,12 +1,15 @@
 """Drivers que aplicam e removem cada tipo de falha. Nenhum deles passa
 pelos serviços instrumentados de forma visível na telemetria.
 """
+import logging
 import threading
 from typing import Protocol
 
 import httpx
 import psycopg
 from psycopg import sql
+
+logger = logging.getLogger("chaos.drivers")
 
 
 class ManualActionRequired(Exception):
@@ -99,3 +102,74 @@ class DeployDriver:
 
     def disable(self, params: dict) -> None:
         raise ManualActionRequired(params["disable_command"])
+
+
+class FaultFlagDriver:
+    """Liga/desliga uma flag de falha num serviço, pela porta interna dele
+    (fora da telemetria). target escolhe shop-api (POST /faults/{flag}) ou
+    payment-service (POST /internal/faults/{flag}).
+    """
+
+    def __init__(self, clients: dict[str, httpx.Client]) -> None:
+        self._clients = clients
+        self._paths = {"shop": "/faults", "payment": "/internal/faults"}
+
+    def _post(self, params: dict, enabled: bool) -> None:
+        target = params["target"]
+        path = f"{self._paths[target]}/{params['flag']}"
+        self._clients[target].post(path, json={"enabled": enabled, "config": params.get("config", {})}).raise_for_status()
+
+    def enable(self, params: dict) -> None:
+        self._post(params, True)
+
+    def disable(self, params: dict) -> None:
+        self._post(params, False)
+
+
+class PgIndexDriver:
+    """Deixa um índice INVALID, o estado de um REINDEX/CREATE INDEX
+    CONCURRENTLY interrompido: o planner o ignora e as consultas viram seq
+    scan, mas as escritas continuam mantendo o índice. Por isso o disable é
+    instantâneo, sem os ~20 s de rebuild de um DROP/CREATE. Exige
+    superusuário (UPDATE em pg_index).
+    """
+
+    def __init__(self, dsn: str) -> None:
+        self._dsn = dsn
+
+    def _set_valid(self, index: str, valid: bool) -> None:
+        with psycopg.connect(self._dsn, application_name="inventory-maintenance", connect_timeout=3, autocommit=True) as conn:
+            conn.execute("UPDATE pg_index SET indisvalid = %s WHERE indexrelid = %s::regclass", (valid, index))
+
+    def enable(self, params: dict) -> None:
+        self._set_valid(params["index"], False)
+
+    def disable(self, params: dict) -> None:
+        self._set_valid(params["index"], True)
+
+
+class CompositeDriver:
+    """Combina vários drivers num cenário só. Liga na ordem dada e desliga na
+    ordem inversa, para que o cleanup espelhe a montagem.
+    """
+
+    def __init__(self, drivers: dict[str, "Driver"]) -> None:
+        self._drivers = drivers
+
+    def enable(self, params: dict) -> None:
+        applied: list[dict] = []
+        try:
+            for step in params["steps"]:
+                self._drivers[step["driver"]].enable(step.get("params", {}))
+                applied.append(step)
+        except Exception:
+            for step in reversed(applied):
+                try:
+                    self._drivers[step["driver"]].disable(step.get("params", {}))
+                except Exception:
+                    logger.exception("rollback do passo %s falhou", step["driver"])
+            raise
+
+    def disable(self, params: dict) -> None:
+        for step in reversed(params["steps"]):
+            self._drivers[step["driver"]].disable(step.get("params", {}))

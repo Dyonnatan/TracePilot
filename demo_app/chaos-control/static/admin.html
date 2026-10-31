@@ -10,7 +10,9 @@
     header { padding: 1.25rem 1.5rem; border-bottom: 1px solid #1e293b; }
     header h1 { margin: 0; font-size: 1.25rem; }
     header p { margin: .25rem 0 0; color: #94a3b8; font-size: .9rem; }
-    main { display: grid; gap: 1rem; padding: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+    main { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .group > h2 { margin: 0 0 .75rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; border-bottom: 1px solid #1e293b; padding-bottom: .4rem; }
+    .group-cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
     .card { background: #1e293b; border: 1px solid #334155; border-radius: .75rem; padding: 1rem; display: flex; flex-direction: column; gap: .6rem; }
     .card.active { border-color: #f97316; box-shadow: 0 0 0 1px #f97316; }
     .row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -95,14 +97,53 @@
       return element;
     }
 
+    // A ordem das chaves define a ordem das seções no painel.
+    const CATEGORY_LABELS = {
+      network: 'Rede',
+      dependency: 'Dependência',
+      host_resource: 'Recurso de host',
+      database: 'Banco de dados',
+      code_change: 'Mudança de código',
+      security: 'Segurança',
+      performance_antipattern: 'Anti-pattern de desempenho',
+    };
+    const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
+    const categoryRank = (category) => {
+      const index = CATEGORY_ORDER.indexOf(category);
+      return index === -1 ? CATEGORY_ORDER.length : index;
+    };
+
     function render() {
-      container.replaceChildren(...scenarios.map((scenario) => {
+      const groups = new Map();
+      const ordered = [...scenarios].sort((a, b) => categoryRank(a.category) - categoryRank(b.category));
+      for (const scenario of ordered) {
+        if (!groups.has(scenario.category)) groups.set(scenario.category, []);
+        groups.get(scenario.category).push(scenario);
+      }
+      container.replaceChildren(...[...groups.entries()].map(([category, items]) => {
+        const section = document.createElement('section');
+        section.className = 'group';
+        const heading = document.createElement('h2');
+        heading.textContent = CATEGORY_LABELS[category] || category;
+        const cards = document.createElement('div');
+        cards.className = 'group-cards';
+        cards.replaceChildren(...items.map(renderCard));
+        section.append(heading, cards);
+        return section;
+      }));
+    }
+
+    function renderCard(scenario) {
         const card = template.content.firstElementChild.cloneNode(true);
         card.classList.toggle('active', scenario.active);
         card.querySelector('.title').textContent = scenario.title;
         const tag = card.querySelector('.tag');
-        tag.textContent = scenario.pitch_role === 'protagonist' ? 'protagonista' : scenario.category;
-        tag.classList.toggle('protagonist', scenario.pitch_role === 'protagonist');
+        if (scenario.pitch_role === 'protagonist') {
+          tag.textContent = 'protagonista';
+          tag.classList.add('protagonist');
+        } else {
+          tag.remove();
+        }
         card.querySelector('.symptom').textContent = scenario.user_symptom;
         card.querySelector('.root-cause').textContent = scenario.root_cause;
 
@@ -122,7 +163,6 @@
           actions.append(button('Ligar', 'enable', () => toggle(scenario.name, 'enable')));
         }
         return card;
-      }));
     }
 
     refresh();
