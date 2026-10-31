@@ -71,11 +71,55 @@ especialista consultar a seguir?") — o TODO que já está registrado em
 
 ## Status
 
-Ainda não implementado — este documento existe pra registrar os candidatos
-e a decisão de design antes de integrar. Próximo passo: instalar o Laya
-localmente (`transformers`/ONNX, sem servidor separado) e escrever
-`decision_provider.py` + adaptar `verifier_agent.py` para usá-lo na
-pergunta de verificação.
+**Implementado e testado.** `agents/llm/decision_provider.py` usa o Laya,
+integrado como checagem independente no `verifier_agent`.
+
+### Benchmark real: Kev-0.8B vs. Laya
+
+O pedido original era testar o Kev com foco em "processar alta quantidade
+de dados em praticamente tempo-real". Resultado medido nesta máquina
+(GTX 1650, mesma pergunta de verificação nos dois):
+
+| | Kev-0.8B | Laya |
+|---|---|---|
+| Latência por chamada (aquecido) | ~310-340ms | ~260-330ms |
+| Throughput com 10 chamadas simultâneas | ~3,4 req/s (**não paraleliza** — serializa em CPU) | não testado em paralelo, mesma limitação esperada (também CPU) |
+| GPU usada? | Não (0 MiB de VRAM durante a chamada) | Não |
+| Resposta pro mesmo caso de teste | 0,72 (sustentado) | 0,36 (teste isolado) / 0,74 (com contexto completo da investigação) |
+
+**Por que nenhum dos dois usa GPU aqui**: o mesmo motivo do Laya — o driver
+NVIDIA instalado (12.4) é mais antigo do que o PyTorch empacotado por esses
+dois projetos espera, então caem pra CPU automaticamente. Isso achata a
+vantagem teórica de velocidade de qualquer um dos dois nesta máquina
+específica; resolver isso (atualizar o driver) deixou de ser só um "nice to
+have" do Laya e virou bloqueio comum aos dois.
+
+**Sobre "tempo real com alto volume"**: nenhum dos dois serve bem um cenário
+de *muitos itens por segundo* nesta máquina (~3 req/s é o teto, CPU-bound,
+sem paralelismo real no servidor). Mas vale separar dois cenários
+diferentes que a frase pode significar:
+
+1. **Uma decisão por investigação** (o que o `verifier_agent` faz hoje) —
+   ~300ms é irrelevante perto dos 40-180s que o resto do pipeline (LLM
+   generativo) já leva. Não é gargalo.
+2. **Classificar um volume alto de itens individuais em tempo real** (ex.:
+   triagem contínua de cada log que chega) — isso **não existe ainda** na
+   arquitetura do TracePilot (hoje a consulta ao OpenObserve é em lote, só
+   quando uma investigação começa). Se for essa a necessidade real, o
+   caminho certo não é só escolher entre Kev/Laya — é batelar múltiplas
+   perguntas numa única chamada (os dois suportam várias `questions` no
+   mesmo `predict`/`systemone`, resolvidas em um único forward pass) em vez
+   de uma chamada por item, e/ou resolver o driver de GPU.
+
+### Recomendação
+
+**Manter o Laya como padrão** — desempenho equivalente ao Kev nesta
+máquina, mas sem precisar manter um segundo processo de servidor rodando
+(`kev.serve` numa porta própria). Kev fica documentado e testado como
+alternativa viável, não descartado — se a qualidade da decisão em casos
+mais complexos importar mais que a simplicidade operacional, vale
+reconsiderar (amostra de 1 caso não é conclusiva o suficiente pra decidir
+isso com confiança).
 
 ## Fontes
 
