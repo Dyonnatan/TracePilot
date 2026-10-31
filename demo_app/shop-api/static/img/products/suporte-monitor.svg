@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Suporte articulado de monitor">
+  <rect width="200" height="200" fill="#f5f5f4"/>
+  <rect x="18" y="160" width="164" height="6" rx="3" fill="#e7e5e4"/>
+  <rect x="30" y="148" width="30" height="14" rx="3" fill="#1c1917"/>
+  <rect x="39" y="96" width="12" height="54" rx="4" fill="#1c1917"/>
+  <path d="M45 100 100 74" stroke="#1c1917" stroke-width="10" stroke-linecap="round"/>
+  <path d="M100 74 146 92" stroke="#78716c" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="100" cy="74" r="9" fill="#a16207"/>
+  <circle cx="45" cy="100" r="7" fill="#44403c"/>
+  <rect x="146" y="76" width="8" height="34" rx="2" fill="#44403c"/>
+  <rect x="154" y="40" width="10" height="106" rx="3" fill="#1c1917"/>
+</svg>
