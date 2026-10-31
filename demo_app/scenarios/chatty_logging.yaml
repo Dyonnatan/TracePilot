@@ -1,0 +1,35 @@
+name: chatty_logging
+title: Log de debug excessivo em produção no shop-api
+category: performance_antipattern
+culprit_component: shop-api (feature flag debug_payload_logging)
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: fault_flag
+  params:
+    target: shop
+    flag: debug_payload_logging
+    config:
+      lines: 50
+
+user_symptom: >
+  A loja fica um pouco mais lenta, sem erro. O custo aparece na conta de
+  ingestão de logs, não para o usuário.
+
+expected_signals:
+  traces:
+    - Spans servidor do shop-api ficam um pouco mais longos; nenhum span novo.
+  logs:
+    - Volume de logs do shop-api salta ~50x com event_type=debug.payload (uma linha por iteração, com os headers da requisição).
+    - shop-api loga "change.event" com change.type=feature_flag e change.flag=debug_payload_logging.
+  metrics:
+    - Ingestão de logs no OpenObserve sobe; CPU do shop-api e do otel-collector sobe um pouco.
+
+root_cause: >
+  A feature flag debug_payload_logging ligou log de debug em produção: ~50
+  linhas debug.payload por requisição, incluindo headers. O custo está no
+  volume de ingestão e no risco de vazar dados em log.
+
+red_herrings:
+  - Nenhum erro; a latência sobe pouco. O sinal principal é volume de log, não trace.

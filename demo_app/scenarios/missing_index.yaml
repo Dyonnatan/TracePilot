@@ -1,0 +1,42 @@
+name: missing_index
+title: Índice orders.session_id inválido (seq scan na página de produto)
+category: database
+culprit_component: postgres (índice orders_session_id_idx, INVALID)
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: pg_index
+  params:
+    index: orders_session_id_idx
+
+user_symptom: >
+  A página de produto fica mais lenta para abrir, principalmente com várias
+  pessoas navegando. Vitrine, carrinho e checkout estão normais.
+
+expected_signals:
+  traces:
+    - Em GET /products/{id}, o span de banco "SELECT max(o.created_at) FROM orders o JOIN order_items ..." passa de menos de 1 ms para dezenas de ms.
+    - Os outros spans de banco (products, coupons, INSERT de pedidos) continuam rápidos.
+  logs:
+    - Nenhum erro e nenhum change.event; a falha no índice é silenciosa.
+  metrics:
+    - Latência HTTP só de GET /products/{id} sobe.
+    - CPU do container do Postgres sobe com a leitura sequencial de orders (~2M linhas) a cada abertura de produto.
+  database:
+    - EXPLAIN da consulta mostra Parallel Seq Scan em orders com Filter (session_id = ...) em vez de Index Scan using orders_session_id_idx.
+    - O índice existe, mas \d orders o mostra como INVALID (pg_index.indisvalid = false).
+    - pg_stat_user_tables mostra seq_scan crescendo em orders.
+
+root_cause: >
+  O índice orders_session_id_idx ficou INVALID, o estado que um REINDEX
+  CONCURRENTLY interrompido de uma rotina de manutenção
+  (application_name=inventory-maintenance) deixa. O planner ignora índices
+  inválidos, então a consulta "você comprou este produto" da página de
+  produto, que filtra pedidos por session_id, virou um seq scan em ~2M
+  pedidos. Correção: REINDEX INDEX CONCURRENTLY orders_session_id_idx.
+
+red_herrings:
+  - O índice aparece na lista de índices da tabela; só o status INVALID denuncia o problema.
+  - Não há lock nem erro de banco; a query termina, só que lenta.
+  - O código do shop-api não mudou (nenhum deploy nem feature flag).

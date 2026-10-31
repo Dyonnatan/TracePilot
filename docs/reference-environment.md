@@ -1,5 +1,15 @@
 # Ambiente de referência monitorado — kickoff
 
+> **Status:** primeira versão implementada em
+> [demo_app/](../demo_app/README.md), substituindo o app de serviço único
+> original. Decisões tomadas: construir
+> do zero (o OpenTelemetry Demo ficou como alternativa, por ser grande demais
+> para o roteiro do pitch); domínio e-commerce; 4 cenários (rede, recurso
+> de host, banco, mudança de código) com gabarito em
+> `demo_app/scenarios/`; métricas de host e containers via
+> `host_metrics`/`docker_stats` do Collector, em override opt-in. O texto
+> abaixo é o kickoff original.
+
 > Documento de início para quem for tocar esta frente do projeto. Define o
 > objetivo, o escopo, o que já existe para se apoiar, e as decisões que
 > ficam a cargo de quem pegar a tarefa. Não é uma especificação fechada —

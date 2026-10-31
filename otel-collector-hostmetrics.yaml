@@ -1,0 +1,25 @@
+# Mesclado sobre otel-collector-config.yaml pelo docker-compose.hostmetrics.yml.
+# Listas não são concatenadas no merge: a lista de receivers do pipeline de
+# métricas abaixo substitui a original, por isso repete `otlp`.
+receivers:
+  host_metrics:
+    root_path: /hostfs
+    collection_interval: 10s
+    scrapers:
+      cpu: {}
+      memory: {}
+      load: {}
+      disk: {}
+      network: {}
+
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 10s
+    timeout: 20s
+    # Docker Engine 29+ recusa versões de API abaixo de 1.44.
+    api_version: "1.44"
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp, host_metrics, docker_stats]

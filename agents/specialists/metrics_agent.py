@@ -20,7 +20,7 @@ métricas disponível, diga isso em vez de especular."""
 
 
 def run(state: dict, llm: LLMProvider, client: OpenObserveClient) -> dict:
-    metric_name = state.get("metric_name", "duration")
+    metric_name = state.get("metric_name", "shop_checkout_requests")
     try:
         metrics = client.query_metrics(
             metric_name=metric_name,
@@ -30,10 +30,8 @@ def run(state: dict, llm: LLMProvider, client: OpenObserveClient) -> dict:
             size=20,
         )
     except Exception:
-        # query_metrics ainda não foi validado contra dado real (ver TODO em
-        # agents/tools/openobserve_client.py) — se a instância de OpenObserve
-        # não tiver stream de métricas, tratamos como "sem evidência" em vez
-        # de derrubar a investigação inteira.
+        # Métrica sem stream no OpenObserve (nome errado ou ainda sem dado):
+        # vira "sem evidência" em vez de derrubar a investigação inteira.
         metrics = []
 
     summary = llm.generate(

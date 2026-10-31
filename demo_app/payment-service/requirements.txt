@@ -1,0 +1,7 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+# Versões OTel fixas: SDK e instrumentações precisam andar juntos.
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp-proto-grpc==1.45.2
+opentelemetry-instrumentation-fastapi==0.66b2
+opentelemetry-instrumentation-logging==0.66b2

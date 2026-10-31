@@ -1,0 +1,35 @@
+name: cpu_saturation
+title: Saturação de CPU no container do payment-service
+category: host_resource
+culprit_component: payment-service (container, limite de 0.5 CPU)
+pitch_role: backup
+ttl_seconds: 120
+
+activation:
+  driver: cpu_burn
+  params:
+    workers: 4
+
+user_symptom: >
+  "Finalizar pedido" fica lento e parte das tentativas termina com "Não
+  consegui concluir a operação". Não há mensagem de erro específica.
+
+expected_signals:
+  traces:
+    - Span servidor do payment-service para /authorize fica muito mais longo, principalmente o span fraud.score.
+    - Parte dos spans cliente do shop-api estoura o timeout de 1000 ms.
+  logs:
+    - shop-api loga "payment.timeout" em parte dos checkouts.
+    - Nenhuma exceção no código do payment-service.
+  metrics:
+    - CPU do container do payment-service no teto do limite de 0.5 core (rate de container_cpu_usage_total, docker_stats).
+    - payment.client.duration sobe; shop.checkout.requests com outcome=payment_timeout aparece.
+
+root_cause: >
+  Processos consumindo CPU dentro do container do payment-service, que tem
+  limite de 0.5 CPU. O throttling deixa o cálculo de fraude (CPU-bound) lento
+  e o shop-api estoura o timeout de pagamento.
+
+red_herrings:
+  - Sintoma no shop-api parecido com payment_latency; a diferença é que aqui o span servidor do payment-service também fica longo e a CPU do container está saturada.
+  - A métrica container_cpu_utilization do docker_stats não serve aqui: com Docker 29 ela reporta a média desde o start do container, não o uso instantâneo.

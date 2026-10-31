@@ -1,0 +1,178 @@
+/* ==========================================================================
+   Apex Space - design tokens
+   Primitivos -> semânticos -> por componente. Os componentes usam só os
+   semânticos e os de componente.
+   ========================================================================== */
+
+:root {
+  /* 1. Primitivos: neutros quentes, grafite e bronze */
+  --primitive-warm-50:  #fafaf9;
+  --primitive-warm-100: #f5f5f4;
+  --primitive-warm-200: #e7e5e4;
+  --primitive-warm-300: #d6d3d1;
+  --primitive-warm-400: #a8a29e;
+  --primitive-warm-500: #78716c;
+  --primitive-warm-600: #57534e;
+  --primitive-warm-700: #44403c;
+  --primitive-warm-800: #292524;
+  --primitive-graphite: #1c1917;
+
+  --primitive-bronze-50:  #fffbeb;
+  --primitive-bronze-600: #a16207;
+  --primitive-bronze-700: #854d0e;
+
+  --primitive-red-100:   #fee2e2;
+  --primitive-red-700:   #b91c1c;
+  --primitive-green-100: #dcfce7;
+  --primitive-green-800: #166534;
+  --primitive-amber-100: #fef3c7;
+  --primitive-amber-800: #92400e;
+
+  /* 2. Semânticos (tema claro) */
+  --color-bg:               var(--primitive-warm-50);
+  --color-surface:          #ffffff;
+  --color-surface-elevated: var(--primitive-warm-100);
+  --color-border:           var(--primitive-warm-200);
+  --color-border-strong:    var(--primitive-warm-300);
+
+  --color-text-primary:     var(--primitive-graphite);
+  --color-text-secondary:   var(--primitive-warm-600);
+  --color-text-placeholder: var(--primitive-warm-500);
+  --color-text-on-primary:  #ffffff;
+
+  --color-primary:          var(--primitive-graphite);
+  --color-primary-hover:    var(--primitive-warm-800);
+  --color-primary-subtle:   var(--primitive-warm-100);
+
+  --color-accent-bronze:    var(--primitive-bronze-600);
+  --color-accent-bronze-bg: var(--primitive-bronze-50);
+
+  --color-focus:            var(--primitive-graphite);
+  --focus-ring:             2px solid var(--color-focus);
+  --focus-offset:           2px;
+
+  --color-danger:           var(--primitive-red-700);
+  --color-danger-bg:        var(--primitive-red-100);
+  --color-danger-text:      var(--primitive-red-700);
+  --color-success:          var(--primitive-green-800);
+  --color-success-bg:       var(--primitive-green-100);
+  --color-success-text:     var(--primitive-green-800);
+  --color-warning:          var(--primitive-amber-800);
+  --color-warning-bg:       var(--primitive-amber-100);
+  --color-warning-text:     var(--primitive-amber-800);
+
+  --color-backdrop:         rgba(28, 25, 23, 0.5);
+
+  /* 3. Tipografia: Major Third (1.25), base 16px */
+  --font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  --font-size-xs:  0.75rem;
+  --font-size-sm:  0.875rem;
+  --font-size-md:  1rem;
+  --font-size-lg:  1.25rem;
+  --font-size-xl:  1.563rem;
+  --font-size-2xl: 1.953rem;
+  --font-size-3xl: 2.441rem;
+
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  --line-height-tight:  1.2;
+  --line-height-normal: 1.5;
+
+  /* 4. Espaçamento (grade de 8px), raios, bordas, sombras, camadas */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-full: 9999px;
+
+  --border-width-1: 1px;
+  --border-width-2: 2px;
+
+  --shadow-0: none;
+  --shadow-1: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-2: 0 4px 6px -1px rgba(28, 25, 23, 0.08), 0 2px 4px -1px rgba(28, 25, 23, 0.05);
+  --shadow-3: 0 20px 25px -5px rgba(28, 25, 23, 0.12), 0 10px 10px -5px rgba(28, 25, 23, 0.04);
+
+  --z-base:   0;
+  --z-sticky: 200;
+  --z-modal:  400;
+
+  /* 5. Motion */
+  --motion-duration-fast:   150ms;
+  --motion-duration-normal: 250ms;
+  --motion-duration-slow:   350ms;
+  --motion-ease-default:    cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-in-out:     cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 6. Por componente */
+  --button-primary-bg:         var(--color-primary);
+  --button-primary-text:       var(--color-text-on-primary);
+  --button-primary-hover-bg:   var(--color-primary-hover);
+  --button-secondary-bg:       var(--primitive-warm-200);
+  --button-secondary-text:     var(--color-text-primary);
+  --button-secondary-hover-bg: var(--primitive-warm-300);
+  --button-ghost-hover-bg:     var(--primitive-warm-100);
+
+  --card-bg:     var(--color-surface);
+  --card-border: var(--color-border);
+
+  --input-bg:           var(--color-surface);
+  --input-border:       var(--primitive-warm-300);
+  --input-border-hover: var(--primitive-warm-400);
+  --input-border-focus: var(--color-primary);
+
+  --container-max: 1280px;
+  --container-pad: var(--space-4);
+  --header-height: 4rem;
+}
+
+/* Tema escuro pronto, mas nada o ativa: a demo usa só o tema claro. */
+[data-theme="dark"] {
+  --color-bg:               var(--primitive-graphite);
+  --color-surface:          var(--primitive-warm-800);
+  --color-surface-elevated: var(--primitive-warm-700);
+  --color-border:           var(--primitive-warm-700);
+  --color-border-strong:    var(--primitive-warm-600);
+
+  --color-text-primary:     var(--primitive-warm-50);
+  --color-text-secondary:   var(--primitive-warm-300);
+  --color-text-on-primary:  var(--primitive-graphite);
+
+  --color-primary:          var(--primitive-warm-50);
+  --color-primary-hover:    var(--primitive-warm-200);
+  --color-primary-subtle:   var(--primitive-warm-700);
+  --color-focus:            var(--primitive-warm-50);
+
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 640px) {
+  :root { --container-pad: var(--space-6); }
+}
+
+@media (min-width: 1024px) {
+  :root { --container-pad: var(--space-8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,4 @@
+-r shop-api/requirements.txt
+-r payment-service/requirements.txt
+-r chaos-control/requirements.txt
+pytest>=8.0

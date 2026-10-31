@@ -24,7 +24,7 @@ from agents.orchestrator import run_investigation
 from agents.tools.openobserve_client import OpenObserveClient
 
 BASE_DIR = Path(__file__).resolve().parent
-DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8099")
+DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8088")
 OPENOBSERVE_UI_URL = os.getenv("OPENOBSERVE_URL", "http://localhost:5080")
 
 app = FastAPI(title="TracePilot")
@@ -74,14 +74,14 @@ def dashboard(request: Request):
 @app.post("/investigations")
 def create_investigation(
     error_report: str = Form(...),
-    service: str = Form("tracepilot-demo-app"),
+    service: str = Form(""),
 ):
     investigation_id = report_store.new_investigation_id()
     thread = threading.Thread(
         target=run_investigation,
         kwargs={
             "error_report": error_report,
-            "service": service,
+            "service": service.strip() or None,
             "investigation_id": investigation_id,
         },
         daemon=True,

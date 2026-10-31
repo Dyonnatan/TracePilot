@@ -1,0 +1,852 @@
+{
+  "version": 8,
+  "title": "TracePilot - Investigação manual (demo_app)",
+  "description": "Caminho manual de investigação dos cenários do demo_app: o trabalho que o TracePilot vai automatizar.",
+  "tabs": [
+    {
+      "tabId": "default",
+      "name": "Investigação",
+      "panels": [
+        {
+          "id": "Panel_ID1",
+          "type": "line",
+          "title": "Resultado dos checkouts (logs)",
+          "description": "Eventos de checkout por tipo. Sucesso cai e um tipo de falha sobe quando um cenário está ativo.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, event_type AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE event_type IN ('checkout.success', 'payment.timeout', 'payment.unavailable', 'payment.error', 'db.unavailable', 'unhandled.error') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Eventos",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 0,
+            "w": 192,
+            "h": 18,
+            "i": 1
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID2",
+          "type": "line",
+          "title": "Pagamento: visão do cliente x visão do servidor (ms)",
+          "description": "Span cliente do shop-api (POST) contra span servidor do payment-service (POST /authorize). Distância grande entre as duas linhas = tempo perdido na rede.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, service_name AS breakdown_1, avg(duration) / 1000 AS y_axis_1 FROM \"default\" WHERE (service_name = 'shop-api' AND operation_name = 'POST') OR (service_name = 'payment-service' AND operation_name = 'POST /authorize') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "traces",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Duração média (ms)",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 18,
+            "w": 192,
+            "h": 18,
+            "i": 2
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID3",
+          "type": "line",
+          "title": "CPU por container, em cores (docker_stats)",
+          "description": "rate de container.cpu.usage.total. Requer o override docker-compose.hostmetrics.yml. O payment-service tem limite de 0.5 core.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 2,
+            "unit": null
+          },
+          "queryType": "promql",
+          "queries": [
+            {
+              "query": "rate(container_cpu_usage_total{container_name=~\"tracepilot-demo-.*\"}[1m]) / 1000000000",
+              "vrlFunctionQuery": "",
+              "customQuery": false,
+              "fields": {
+                "stream": "container_cpu_usage_total",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "{container_name}",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 36,
+            "w": 96,
+            "h": 18,
+            "i": 3
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID4",
+          "type": "line",
+          "title": "Queries ao Postgres: duração (ms)",
+          "description": "Spans de banco do shop-api por status. Queries canceladas por statement_timeout ficam em ~2000 ms.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, span_status AS breakdown_1, max(duration) / 1000 AS y_axis_1 FROM \"default\" WHERE service_name = 'shop-api' AND operation_name IN ('SELECT', 'INSERT') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "traces",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Duração máxima (ms)",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 36,
+            "w": 96,
+            "h": 18,
+            "i": 4
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID9",
+          "type": "line",
+          "title": "Respostas 5XX por serviço (traces)",
+          "description": "Spans servidor com status HTTP 5XX. payment_errors: 503 no payment-service e 502 no shop-api.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, concat(service_name, ' ', http_status_code) AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE span_kind = '2' AND http_status_code LIKE '5%' GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "traces",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Respostas",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 54,
+            "w": 96,
+            "h": 18,
+            "i": 9
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID10",
+          "type": "line",
+          "title": "Chamadas ao payment-service por checkout",
+          "description": "Normal fica perto de 1. retry_storm: sobe para várias tentativas por checkout.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 2,
+            "unit": null
+          },
+          "queryType": "promql",
+          "queries": [
+            {
+              "query": "sum(rate(payment_client_duration_count{service_name=\"shop-api\"}[1m])) / sum(rate(shop_checkout_requests{service_name=\"shop-api\"}[1m]))",
+              "vrlFunctionQuery": "",
+              "customQuery": false,
+              "fields": {
+                "stream": "payment_client_duration_count",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "tentativas por checkout",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 54,
+            "w": 96,
+            "h": 18,
+            "i": 10
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID11",
+          "type": "line",
+          "title": "Memória do shop-api (MB, RSS)",
+          "description": "memory_leak: cresce de forma linear enquanto o cenário está ligado.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "promql",
+          "queries": [
+            {
+              "query": "process_memory_usage{service_name=\"shop-api\"} / 1048576",
+              "vrlFunctionQuery": "",
+              "customQuery": false,
+              "fields": {
+                "stream": "process_memory_usage",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "{service_name}",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 72,
+            "w": 96,
+            "h": 18,
+            "i": 11
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID12",
+          "type": "line",
+          "title": "Volume de logs do shop-api por event_type",
+          "description": "chatty_logging: debug.payload domina o volume (~50 linhas por requisição).",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, event_type AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE service_name = 'shop-api' GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Linhas de log",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 72,
+            "w": 96,
+            "h": 18,
+            "i": 12
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID5",
+          "type": "table",
+          "title": "Spans com erro",
+          "description": "Onde os erros aparecem nos traces, por serviço e operação.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT service_name, operation_name, count(*) AS erros, round(avg(duration) / 1000) AS duracao_media_ms FROM \"default\" WHERE span_status = 'ERROR' GROUP BY service_name, operation_name ORDER BY erros DESC",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "traces",
+                "x": [
+                  {
+                    "label": "Serviço",
+                    "alias": "service_name",
+                    "column": "service_name",
+                    "color": null
+                  },
+                  {
+                    "label": "Operação",
+                    "alias": "operation_name",
+                    "column": "operation_name",
+                    "color": null
+                  },
+                  {
+                    "label": "Erros",
+                    "alias": "erros",
+                    "column": "erros",
+                    "color": null
+                  },
+                  {
+                    "label": "Duração média (ms)",
+                    "alias": "duracao_media_ms",
+                    "column": "duracao_media_ms",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 90,
+            "w": 96,
+            "h": 18,
+            "i": 5
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID6",
+          "type": "table",
+          "title": "Mudanças (deploys e feature flags)",
+          "description": "Eventos change.event: compare o horário com o início dos erros.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, change_service, change_type, change_version, body FROM \"default\" WHERE event_type = 'change.event' ORDER BY _timestamp DESC",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "Quando",
+                    "alias": "_timestamp",
+                    "column": "_timestamp",
+                    "color": null
+                  },
+                  {
+                    "label": "Serviço",
+                    "alias": "change_service",
+                    "column": "change_service",
+                    "color": null
+                  },
+                  {
+                    "label": "Tipo",
+                    "alias": "change_type",
+                    "column": "change_type",
+                    "color": null
+                  },
+                  {
+                    "label": "Versão",
+                    "alias": "change_version",
+                    "column": "change_version",
+                    "color": null
+                  },
+                  {
+                    "label": "Descrição",
+                    "alias": "body",
+                    "column": "body",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 90,
+            "w": 96,
+            "h": 18,
+            "i": 6
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID7",
+          "type": "table",
+          "title": "Relatos de usuários",
+          "description": "Relatos enviados pelo botão Reportar problema, com o trace_id do erro que o usuário viu.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, report_ticket, session_id, report_trace_id, body FROM \"default\" WHERE event_type = 'user.report' ORDER BY _timestamp DESC",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "Quando",
+                    "alias": "_timestamp",
+                    "column": "_timestamp",
+                    "color": null
+                  },
+                  {
+                    "label": "Ticket",
+                    "alias": "report_ticket",
+                    "column": "report_ticket",
+                    "color": null
+                  },
+                  {
+                    "label": "Sessão",
+                    "alias": "session_id",
+                    "column": "session_id",
+                    "color": null
+                  },
+                  {
+                    "label": "trace_id",
+                    "alias": "report_trace_id",
+                    "column": "report_trace_id",
+                    "color": null
+                  },
+                  {
+                    "label": "Relato",
+                    "alias": "body",
+                    "column": "body",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 108,
+            "w": 192,
+            "h": 16,
+            "i": 7
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID8",
+          "type": "table",
+          "title": "Logs de erro recentes",
+          "description": "Logs ERROR de todos os serviços, com trace_id e sessão para correlação.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT _timestamp, service_name, event_type, body, trace_id, session_id FROM \"default\" WHERE severity = 'ERROR' ORDER BY _timestamp DESC LIMIT 100",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "Quando",
+                    "alias": "_timestamp",
+                    "column": "_timestamp",
+                    "color": null
+                  },
+                  {
+                    "label": "Serviço",
+                    "alias": "service_name",
+                    "column": "service_name",
+                    "color": null
+                  },
+                  {
+                    "label": "Evento",
+                    "alias": "event_type",
+                    "column": "event_type",
+                    "color": null
+                  },
+                  {
+                    "label": "Mensagem",
+                    "alias": "body",
+                    "column": "body",
+                    "color": null
+                  },
+                  {
+                    "label": "trace_id",
+                    "alias": "trace_id",
+                    "column": "trace_id",
+                    "color": null
+                  },
+                  {
+                    "label": "Sessão",
+                    "alias": "session_id",
+                    "column": "session_id",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 124,
+            "w": 192,
+            "h": 20,
+            "i": 8
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "list": [],
+    "showDynamicFilters": true
+  },
+  "defaultDatetimeDuration": {
+    "type": "relative",
+    "relativeTimePeriod": "15m",
+    "startTime": 0,
+    "endTime": 0
+  }
+}

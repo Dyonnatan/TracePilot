@@ -1,6 +1,8 @@
 services:
   openobserve:
-    image: public.ecr.aws/zinclabs/openobserve:latest
+    # Tag fixa: o dashboard exportado em demo_app/dashboards/ depende do
+    # formato de import desta versão.
+    image: public.ecr.aws/zinclabs/openobserve:v1.1.2
     container_name: tracepilot-openobserve
     environment:
       ZO_ROOT_USER_EMAIL: admin@tracepilot.local
@@ -25,6 +27,12 @@ services:
       - "4318:4318" # OTLP HTTP
     depends_on:
       - openobserve
+
+# Rede nomeada para o demo_app/ entrar como rede externa e exportar
+# para o mesmo otel-collector.
+networks:
+  default:
+    name: tracepilot
 
 volumes:
   openobserve_data:
