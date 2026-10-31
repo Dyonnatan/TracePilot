@@ -223,6 +223,7 @@ table.cmp{width:100%;border-collapse:separate;border-spacing:0;margin-top:38px;f
 .why2 div{font-size:26px;line-height:1.35;color:var(--ink-2)}
 .why2 b{display:block;font-size:34px;color:var(--ink);margin-bottom:2px}
 .why2 span{display:block}
+.why2 .nx{background:var(--ok-soft);border-radius:12px;padding:20px 26px}
 .why2 .sp{font-size:30px;padding-top:18px;border-top:1px solid var(--line)}
 .why2 .sp b{display:inline;font-size:36px;color:var(--ok)}
 
@@ -386,24 +387,18 @@ table.cmp{width:100%;border-collapse:separate;border-spacing:0;margin-top:38px;f
 <!-- 7 BENCHMARK -->
 <section class="slide" data-t="0:25">
   <div class="eyebrow">06 · Benchmark de referência: OpenRCA</div>
-  <h2>Melhor da literatura: <em>11 em 100</em> falhas.</h2>
-  <div class="chips"><span class="tag">Microsoft · ICLR 2025</span><span class="tag">335 falhas</span><span class="tag">+68 GB de telemetria</span><span class="tag">3 sistemas empresariais</span></div>
-  <div class="wf-row">
+  <h2>IAs de ponta, sozinhas: <em>11 em 100.</em></h2>
+  <div class="chips"><span class="tag">Microsoft · ICLR 2025</span><span class="tag">335 falhas reais</span><span class="tag">+68 GB de telemetria</span><span class="tag">3 sistemas empresariais</span></div>
+  <div class="wf-row" style="grid-template-columns:auto 1fr;gap:70px">
     <div class="wf">
-      <div class="wf-t">Melhor resultado publicado</div>
+      <div class="wf-t">Falhas resolvidas · melhor publicado</div>
       <div class="waffle" id="wf-ref"></div>
       <div class="wf-n" style="color:var(--down)">11,34%</div>
     </div>
-    <div class="vs">vs</div>
-    <div class="wf">
-      <div class="wf-t">TracePilot · multiagente</div>
-      <div class="waffle" id="wf-tp"></div>
-      <div class="wf-n" id="wf-tp-n" style="color:var(--ok)">medição em andamento</div>
-    </div>
-    <div class="why2">
-      <div><b>Mais acerto</b><span>especialistas por fonte, generalista que consolida e verificador que contesta</span></div>
-      <div><b>Menos tokens</b><span>o especialista filtra a evidência; só o resumo sobe</span></div>
-      <div class="sp"><b>~45 s</b> por investigação · <b>~300 ms</b> por decisão do verificador</div>
+    <div class="why2" style="padding-top:20px;gap:26px">
+      <div><b>A IA solitária não basta</b><span>Causa raiz exige cruzar logs, métricas e traces em volumes enormes. Um modelo sozinho se perde.</span></div>
+      <div class="nx"><b>Nosso próximo passo</b><span>Rodar o sistema agentico no OpenRCA: especialistas por fonte, generalista que consolida e verificador que contesta, com menos tokens.</span></div>
+      <div class="sp">Já entregamos <b>~45 s</b> por investigação e <b>~300 ms</b> por decisão do verificador, num MVP funcional.</div>
     </div>
   </div>
   <div class="foot"><div class="brand">TracePilot</div><div>7 / 10</div></div>
@@ -497,7 +492,7 @@ Honestidade: segurança ainda NÃO está implementada; não dizer que já detect
 `"Sentry e Datadog são excelentes, e ser justo: ambos já têm IA para causa raiz — Seer e Bits AI. Mas foram feitos para desenvolvedores e times de SRE, dentro das plataformas deles. Nossa aposta: linguagem de quem não é SRE, o prompt de correção para a sua IA de código, e dados sob o seu controle, com stack aberta e modelo local."
 Cuidado: não afirmar que eles 'não têm IA'. Não citar preços de concorrentes.`,
 
-`"A referência é o OpenRCA, da Microsoft, publicado no ICLR 2025: 335 falhas reais de três sistemas empresariais, mais de 68 GB de telemetria. O melhor resultado publicado, com um agente dedicado, resolve apenas 11,34% dos casos. Nossa tese é que um sistema com IAs especialistas por fonte, um generalista que consolida e um verificador que contesta se sai melhor do que uma IA sozinha — e gasta menos tokens, porque cada especialista filtra a evidência e só o resumo sobe adiante. Hoje, uma investigação leva cerca de 45 segundos e a decisão do verificador, cerca de 300 milissegundos, numa máquina com GPU de 4 GB."\nIMPORTANTE: o resultado do TracePilot no OpenRCA ainda NÃO foi medido; apresentar como tese e meta, não como resultado. Não revelar os modelos usados. (O 11,34% é do paper: melhor modelo da época com o agente RCA da Microsoft.)`,
+`"O OpenRCA, da Microsoft, publicado no ICLR 2025, reúne 335 falhas reais de três sistemas empresariais e mais de 68 GB de telemetria. Mesmo o melhor resultado publicado — um modelo de ponta com um agente dedicado — resolve só 11 em cada 100 casos. A IA solitária não basta. Nosso próximo passo é rodar o sistema agentico no mesmo benchmark: especialistas por fonte, um generalista que consolida, um verificador que contesta, gastando menos tokens. Enquanto isso, o MVP já entrega uma investigação em cerca de 45 segundos e a decisão do verificador em cerca de 300 milissegundos."\nNÃO afirmar que o TracePilot já supera esse número: não foi medido. Não revelar os modelos usados.`,
 
 `"O mercado de observabilidade passa de 10 para 23 bilhões de dólares até 2031, e cada vez mais código chega à produção gerado por IA. As ferramentas mostram o quê; nós respondemos o porquê, para quem não tem SRE. Modelo: núcleo aberto, assinatura por serviço monitorado e versão gerenciada. Preço é hipótese a validar."
 (Estimativa varia entre ~US$3 bi e US$28 bi conforme a definição.)`,
@@ -540,15 +535,9 @@ addEventListener('keydown',e=>{
 addEventListener('click',e=>{if(e.target.closest('#notes,[contenteditable]'))return;if(!t0)t0=Date.now();go(e.clientX>innerWidth/3?i+1:i-1)});
 addEventListener('resize',fit);
 
-// Resultado do TracePilot no OpenRCA (% de falhas resolvidas). Preencha quando medido, ex.: const TP_SCORE = 23.4;
-const TP_SCORE = null;
 (function(){
-  const mk=(id,n,cls)=>{const el=document.getElementById(id);for(let k=0;k<100;k++){const c=document.createElement('i');if(k<n)c.className='on';el.appendChild(c)}if(cls)el.classList.add(...cls)};
-  mk('wf-ref',11);
-  const pend=(typeof TP_SCORE!=='number');
-  mk('wf-tp',pend?0:Math.round(TP_SCORE),pend?['tp','pending']:['tp']);
-  const n=document.getElementById('wf-tp-n');
-  if(pend){n.classList.add('pend');n.textContent='medição em andamento'}else n.textContent=String(TP_SCORE).replace('.',',')+'%';
+  const el=document.getElementById('wf-ref');
+  for(let k=0;k<100;k++){const c=document.createElement('i');if(k<11)c.className='on';el.appendChild(c)}
 })();
 fit();go((parseInt(location.hash.slice(1))||1)-1);
 </script>

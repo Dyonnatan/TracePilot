@@ -22,3 +22,6 @@ reports/*
 
 # Estado do workspace (perfil/onboarding) gerado em runtime
 workspace/
+
+# Dataset OpenRCA baixado para benchmark (grande)
+benchmark/openrca-data/
