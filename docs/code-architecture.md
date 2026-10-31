@@ -64,21 +64,39 @@ condicional — ver justificativa completa em
 (fiação, sem roteamento condicional) — é o próximo passo de implementação,
 junto com a lógica de cada nó.
 
-## `demo_app/` — aplicação de teste instrumentada
+## `demo_app/` — ambiente de referência monitorado
 
-FastAPI com `FastAPIInstrumentor` (OpenTelemetry) e exportação OTLP para o
-collector. Decisão de design: o endpoint `POST /checkout` tem uma falha
-controlada **determinística** (`ZeroDivisionError` quando `quantity == 0`)
-em vez de uma falha aleatória — para que qualquer investigação (manual ou
-por agente) seja reproduzível e comparável entre execuções, essencial para
-o benchmark. Esse é o caso de teste "canário" que o TracePilot deve
-conseguir diagnosticar de ponta a ponta quando os agentes estiverem
-implementados.
+Loja multi-serviço em Python (`shop-api`, `payment-service`, Postgres,
+`toxiproxy` entre os serviços, `loadgen`) com seu próprio
+`docker-compose.yml`, exportando para o mesmo Collector da raiz pela rede
+Docker `tracepilot`. Guia de uso em
+[demo_app/README.md](../demo_app/README.md). Decisão de design: as falhas
+são **determinísticas** (ativadas por comando, nunca aleatórias) para que
+qualquer investigação, manual ou por agente, seja reproduzível e comparável
+entre execuções, essencial para o benchmark.
+
+| Peça | Decisão de design |
+|---|---|
+| `scenarios/*.yaml` | Fonte da verdade dos cenários: ativação, TTL, sinais esperados e causa raiz gabarito, para o benchmark comparar com o diagnóstico dos agentes. A tabela do README é gerada a partir deles. |
+| `chaos-control/` | Injeta as falhas (toxiproxy, lock no Postgres, CPU burn) **sem OpenTelemetry**: a injeção não pode aparecer na telemetria, senão entrega o gabarito aos agentes. Falhas têm TTL (padrão 120 s). |
+| `shop-api/` | Frontend com `session_id` e relato de problema (`user.report` com `trace_id`): é a entrada (`error_report`) que o orquestrador vai consumir. Deploy versionado (`SHOP_VERSION`) gera `change.event`, o histórico de mudanças legítimo. |
+| `payment-service/` | `/internal/*` (canal do chaos-control) excluído de traces e sem access log. |
+| `dashboards/` | Dashboard OpenObserve com o caminho de investigação manual — o trabalho que o TracePilot automatiza. |
+
+Falta implementar: novos cenários (dependência externa, saturação de
+memória), métricas do Postgres via receiver do Collector e uma versão
+poliglota de algum serviço.
 
 ## `docker-compose.yml` + `otel-collector-config.yaml`
 
 Sobe `openobserve` (armazenamento/consulta de telemetria) e
-`otel-collector` (recebe OTLP do `demo_app` e exporta para o OpenObserve).
+`otel-collector` (recebe OTLP do `demo_app` e exporta para
+o OpenObserve). A imagem do OpenObserve tem tag fixa porque o dashboard em
+`demo_app/dashboards/` depende do formato de import da versão. O
+override opt-in `docker-compose.hostmetrics.yml` +
+`otel-collector-hostmetrics.yaml` adiciona os receivers `host_metrics` e
+`docker_stats`; ele monta o socket do Docker (equivale a root no host) e por
+isso não faz parte da stack padrão.
 Decisão de design: credenciais do OpenObserve (`ZO_ROOT_USER_EMAIL/PASSWORD`)
 estão com um valor padrão fixo no compose — aceitável para ambiente de
 desenvolvimento local, mas **deve migrar para `.env`** antes de qualquer
@@ -99,7 +117,8 @@ gerados pelo `verifier_agent` ao final do fluxo — hoje só existe a pasta
 2. Implementar `openobserve_client.py` contra uma instância local do
    `docker-compose.yml`.
 3. Implementar `logs_agent.py` sozinho, validando contra o erro determinístico
-   do `demo_app` (`ZeroDivisionError` em `/checkout`).
+   do cenário `coupon_bug` do `demo_app` (`ZeroDivisionError` em
+   `/cart/quote` e `/checkout`).
 4. Repetir para `metrics_agent.py` e `traces_agent.py`.
 5. Implementar `diagnosis_agent.py` e `verifier_agent.py`.
 6. Trocar o fluxo linear do `orchestrator.py` por roteamento condicional.

@@ -56,16 +56,20 @@ Detalhe módulo a módulo em [docs/code-architecture.md](docs/code-architecture.
 ```
 TracePilot/
 ├── agents/            # orquestrador LangGraph + agentes especialistas + providers de LLM
-├── demo_app/           # app FastAPI instrumentada, com falhas controladas
+├── demo_app/           # ambiente de referência multi-serviço + cenários de falha (demo do pitch)
 ├── benchmark/          # notas de avaliação (OpenRCA)
 ├── reports/             # relatórios de incidente gerados
 ├── docs/                 # arquitetura geral e de código
 ├── docker-compose.yml    # OpenObserve + OTel Collector
-└── otel-collector-config.yaml
+├── docker-compose.hostmetrics.yml  # override opt-in: métricas de host e containers
+├── otel-collector-config.yaml
+└── otel-collector-hostmetrics.yaml
 ```
 
-> Estágio atual: **scaffold**. Estrutura e interfaces definidas, lógica de
-> investigação ainda não implementada (ver TODOs em `docs/code-architecture.md`).
+> Estágio atual: os agentes ainda são **scaffold** (interfaces definidas,
+> lógica de investigação não implementada; ver TODOs em
+> `docs/code-architecture.md`). O [ambiente de referência](demo_app/README.md)
+> já gera incidentes reais e telemetria correlacionada para eles investigarem.
 
 ## Como rodar localmente
 
@@ -77,22 +81,30 @@ docker compose up -d
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
-# 3. Rodar a aplicação de teste instrumentada
-cd demo_app && pip install -r requirements.txt
-uvicorn main:app --reload
 ```
 
 Configurações (chaves de API, backend de LLM, endpoints) ficam em `.env` —
 copie `.env.example` para `.env` e preencha.
 
+### Ambiente de referência (demo)
+
+```bash
+cd demo_app
+make up   # telemetria (com métricas de host) + loja multi-serviço + painel de falhas
+```
+
+Loja em <http://localhost:8088>, painel de falhas em <http://localhost:8090>
+e OpenObserve em <http://localhost:5080>. Roteiro da demo, cenários e
+gabaritos em [demo_app/README.md](demo_app/README.md).
+
 ## Roadmap
 
 1. Implementar a lógica de cada agente (coleta + raciocínio) sobre o
    `orchestrator.py`.
-2. Construir o [ambiente de referência monitorado](docs/reference-environment.md)
-   (Docker, multi-serviço, com cenários de falha controlados) para dar
-   material realista às investigações.
+2. ~~Construir o [ambiente de referência monitorado](docs/reference-environment.md)
+   (Docker, multi-serviço, com cenários de falha controlados).~~ Primeira
+   versão em [demo_app/](demo_app/README.md): 4 cenários com
+   gabarito.
 3. Avaliar com o benchmark aberto **OpenRCA**: LLM simples vs. agente único
    vs. multiagente, medindo acurácia, tempo, custo e fundamentação.
 4. Laboratório próprio: correlacionar ação do usuário → falha de backend →
