@@ -1,0 +1,7 @@
+{
+  "name": "tracepilot-demo-video",
+  "private": true,
+  "description": "Gravação da apresentação do TracePilot com Playwright",
+  "scripts": { "record": "node record.js", "compose": "bash compose.sh" },
+  "dependencies": { "playwright": "^1.56.0" }
+}
