@@ -112,9 +112,7 @@ loja local) e veja o painel em até 10 s.
 Abra <http://localhost:8800>. O login e a jornada vêm pré-preenchidos
 (`lucas@apexspace.com.br` / `apex2026`, preset em
 `webapp/presets/reference-environment.json`); ao terminar, o painel abre
-com um guia em balões (reabre pelo botão **Guia**). A loja roda da branch
-`feat/reference-environment` num worktree em `.worktrees/`, sem tocar na
-branch atual; falhas para demonstrar em <http://localhost:8090>. Logs e
+com um guia em balões (reabre pelo botão **Guia**). A loja é o `demo_app/` (ambiente de referência); falhas para demonstrar em <http://localhost:8090>. Logs e
 PIDs dos processos locais em `workspace/run/`. Para refazer a jornada do
 zero: apague `workspace/profile.json`.
 

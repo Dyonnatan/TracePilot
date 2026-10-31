@@ -19,6 +19,13 @@ Resumo do especialista em métricas:
 Resumo do especialista em traces:
 {traces_summary}
 
+Investigação entre serviços (cadeia do erro e linha do tempo, dados brutos):
+{deep_dive_digest}
+
+Num erro 500/502, a causa costuma estar no span MAIS PROFUNDO que falhou
+(numa dependência), não no serviço que devolveu o erro ao usuário nem num
+intermediário (proxy, balanceador). Prefira essa origem quando ela existir.
+
 Liste de 1 a 3 hipóteses de causa-raiz, da mais para a menos provável.
 Para cada uma, no formato:
 
@@ -35,6 +42,7 @@ def run(state: dict, llm: LLMProvider) -> dict:
             logs_summary=state.get("logs_summary", "(não coletado)"),
             metrics_summary=state.get("metrics_summary", "(não coletado)"),
             traces_summary=state.get("traces_summary", "(não coletado)"),
+            deep_dive_digest=state.get("deep_dive_digest", "(não coletado)"),
         ),
         system=SYSTEM_PROMPT,
     )

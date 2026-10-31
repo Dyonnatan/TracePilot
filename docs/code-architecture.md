@@ -59,6 +59,23 @@ mesmos três nomes.
 `value`. `query_metrics` deriva o stream do nome; antes consultava
 `default` e por isso o painel nunca reconhecia o agente.
 
+**Investigação aprofundada do erro 500** (`agents/deep_dive_agent.py`):
+o grafo passa a ser logs → métricas → traces → **linha do tempo** →
+diagnóstico → verificação → **melhor palpite** (só se a verificação não
+fechar) → resumo simples → relatório. A linha do tempo é determinística,
+cobre 24 h e todos os serviços (o informado + os relacionados do
+perfil), e segue cada rastro com erro até o **span mais profundo que
+falhou** — num 500/502 a causa costuma estar numa dependência, dois ou três
+saltos abaixo (ex.: shop-api 502 → payment-service 503 → `acquirer.charge`
+com `AcquirerUnavailable`). Também marca primeiro erro e pico, deploys
+pouco antes do primeiro erro, latência antes x depois, CPU perto do
+primeiro erro e logs agrupados por mensagem. Ela roda *antes* do
+diagnóstico de propósito: rodando depois, o diagnóstico só via o serviço
+de entrada e chutava o intermediário (o proxy) como causa. Quando a
+verificação não aceita, o LLM é obrigado a dar um palpite com confiança em
+% citando a cadeia e a temporalidade — a tela mostra "Melhor palpite · N%"
+em vez de "Ainda sem certeza", com a cadeia do erro e a linha do tempo.
+
 **Segurança** (duas frentes, regras determinísticas e explicáveis):
 
 - `agents/tools/security_scan.py` — análise de vulnerabilidades, rodada no

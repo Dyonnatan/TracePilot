@@ -93,7 +93,8 @@ def build_graph() -> StateGraph:
     graph.add_node("traces_agent", lambda s: traces_agent.run(s, llm, client))
     graph.add_node("diagnosis_agent", lambda s: diagnosis_agent.run(s, llm))
     graph.add_node("verifier_agent", lambda s: verifier_agent.run(s, llm, decision))
-    graph.add_node("deep_dive_agent", lambda s: deep_dive_agent.run(s, llm, client))
+    graph.add_node("timeline_agent", lambda s: deep_dive_agent.run_timeline(s, client))
+    graph.add_node("best_guess_agent", lambda s: deep_dive_agent.run_best_guess(s, llm))
     graph.add_node("plain_summary_agent", lambda s: plain_summary_agent.run(s, llm))
     graph.add_node("report", report_node)
 
@@ -105,12 +106,14 @@ def build_graph() -> StateGraph:
     graph.add_edge("orchestrator", "logs_agent")
     graph.add_edge("logs_agent", "metrics_agent")
     graph.add_edge("metrics_agent", "traces_agent")
-    graph.add_edge("traces_agent", "diagnosis_agent")
+    # Linha do tempo entre serviços antes do diagnóstico: a origem de um
+    # erro 500 costuma estar numa dependência, não no serviço de entrada.
+    graph.add_edge("traces_agent", "timeline_agent")
+    graph.add_edge("timeline_agent", "diagnosis_agent")
     graph.add_edge("diagnosis_agent", "verifier_agent")
-    # Aprofundamento sempre: monta a linha do tempo entre serviços e, se o
-    # verificador não aceitou o diagnóstico, produz o melhor palpite.
-    graph.add_edge("verifier_agent", "deep_dive_agent")
-    graph.add_edge("deep_dive_agent", "plain_summary_agent")
+    # Se o verificador não aceitou, melhor palpite em vez de "inconclusivo".
+    graph.add_edge("verifier_agent", "best_guess_agent")
+    graph.add_edge("best_guess_agent", "plain_summary_agent")
     graph.add_edge("plain_summary_agent", "report")
     graph.add_edge("report", END)
 

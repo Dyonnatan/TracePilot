@@ -16,6 +16,8 @@ Evidência disponível:
 - Logs: {logs_summary}
 - Métricas: {metrics_summary}
 - Traces: {traces_summary}
+- Cadeia do erro entre serviços e linha do tempo:
+{deep_dive_digest}
 
 Responda no formato exato:
 
@@ -40,6 +42,7 @@ def run(state: dict, llm: LLMProvider, decision: DecisionProvider | None = None)
             logs_summary=state.get("logs_summary", "(não coletado)"),
             metrics_summary=state.get("metrics_summary", "(não coletado)"),
             traces_summary=state.get("traces_summary", "(não coletado)"),
+            deep_dive_digest=state.get("deep_dive_digest", "(não coletado)"),
         ),
         system=SYSTEM_PROMPT,
     )

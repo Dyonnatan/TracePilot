@@ -4,14 +4,16 @@ import ollama
 
 from .base import LLMProvider
 
-DEFAULT_MODEL = "llama3.2:3b"
+# Mesmo padrão do .env.example e de docs/code-architecture.md (testado:
+# diagnóstico correto e consistente na falha do demo_app).
+DEFAULT_MODEL = "gemma3:4b"
 
 
 class LocalProvider(LLMProvider):
     """Provider via modelo open-weight local, servido pelo Ollama.
 
     Pensado para GPUs de entrada (ex.: 4GB de VRAM): o padrão é um modelo
-    pequeno (`llama3.2:3b`, ~2GB em q4) que roda inteiro na GPU. Modelos
+    de ~4B (`gemma3:4b`, ~3,3GB) que roda quase todo na GPU. Modelos
     maiores (ex. `qwen2.5:7b-instruct`) também funcionam — o Ollama faz
     offload parcial pra CPU se não couber na VRAM, só fica mais lento.
     Trocar de modelo é só mudar `OLLAMA_MODEL` no `.env`.

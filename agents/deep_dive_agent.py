@@ -1,6 +1,6 @@
 """Investigação aprofundada: nunca parar no "inconclusivo".
 
-Roda depois do verificador, sempre. Duas partes:
+Duas partes:
 
 1. Linha do tempo (determinística, sem LLM) numa janela larga (24 h) e em
    TODOS os serviços envolvidos, não só no de entrada:
@@ -14,7 +14,10 @@ Roda depois do verificador, sempre. Duas partes:
    - recursos: CPU/memória do servidor perto do primeiro erro;
    - logs de erro de todos os serviços, agrupados por mensagem.
 
-2. Melhor palpite (LLM), só quando o verificador não aceitou o diagnóstico:
+   Roda ANTES do diagnóstico (`run_timeline`), e o digest vai para o
+   diagnóstico e para o verificador.
+
+2. Melhor palpite (LLM, `run_best_guess`), só quando o verificador não aceitou o diagnóstico:
    com a linha do tempo em mãos, o modelo é obrigado a dar a causa mais
    provável, uma confiança em % e a ação — em vez de "não temos certeza".
 """
@@ -239,11 +242,17 @@ def digest(timeline: dict) -> str:
                      + (f", exceção {exc['type']}: {exc['message']}" + (f" ({exc['where']})" if exc.get("where") else "") if exc else ""))
         same = sum(1 for x in f.get("origins", []) if x["service"] == o["service"] and x["operation"] == o["operation"])
         lines.append(f"Mesma origem em {same} de {len(f.get('origins', []))} rastros com erro analisados.")
+    # Conclusão explícita junto do número: modelos pequenos leem "53 x 51 ms"
+    # ou "CPU 19%" como "pico" se o texto não disser que está normal.
     if f.get("latency"):
         l = f["latency"]
-        lines.append(f"Latência de {l['route']}: {l['before_ms']} ms antes x {l['after_ms']} ms depois do primeiro erro.")
+        slower = l["after_ms"] > l["before_ms"] * 2 and l["after_ms"] - l["before_ms"] > 200
+        lines.append(f"Latência de {l['route']}: {l['before_ms']} ms antes x {l['after_ms']} ms depois do primeiro erro"
+                     + (" — FICOU MAIS LENTA." if slower else " — sem mudança relevante (não é lentidão)."))
     if f.get("cpu_peak_near_first_error") is not None:
-        lines.append(f"Pico de CPU do servidor perto do primeiro erro: {f['cpu_peak_near_first_error']}%.")
+        cpu = f["cpu_peak_near_first_error"]
+        lines.append(f"Pico de CPU do servidor perto do primeiro erro: {cpu}%"
+                     + (" — ALTO." if cpu >= 85 else " — normal (não é falta de CPU)."))
     for service, vs in f.get("versions", {}).items():
         if len(vs) > 1:
             lines.append(f"Versões de {service} na janela: " + ", ".join(f"{v} (desde {_fmt_ts(t)})" for v, t in vs))
@@ -299,29 +308,38 @@ def _parse_guess(text: str) -> dict:
     }
 
 
-def run(state: dict, llm: LLMProvider, client: OpenObserveClient) -> dict:
-    services = [state.get("service")] + [s for s in (state.get("related_services") or []) if s != state.get("service")]
-    services = [s for s in services if s]
+def run_timeline(state: dict, client: OpenObserveClient) -> dict:
+    """Etapa determinística — roda ANTES do diagnóstico, para ele (e o
+    verificador) já enxergarem a origem do erro entre serviços. Sem isso o
+    diagnóstico via só o serviço de entrada e chutava a dependência mais
+    próxima (ex.: o proxy) em vez da origem real três saltos abaixo."""
+    services = [state.get("service")] + list(state.get("related_services") or [])
+    services = list(dict.fromkeys(s for s in services if s))
+    if not services:
+        return {**state, "timeline": [], "deep_dive_digest": "(serviço não informado)"}
     try:
         timeline = build_timeline(client, services, state.get("end_time"))
     except Exception as exc:  # noqa: BLE001 — a investigação segue sem a linha do tempo
-        return {**state, "timeline": [], "deep_dive_error": str(exc)}
-
+        return {**state, "timeline": [], "deep_dive_error": str(exc), "deep_dive_digest": "(indisponível)"}
     result = {**state, "timeline": timeline["events"], "timeline_facts": timeline["facts"],
               "deep_dive_digest": digest(timeline)}
-    origin = timeline["facts"].get("origin")
-    if origin:
-        result["error_origin"] = origin
-
-    if not state.get("verified"):
-        raw = llm.generate(
-            prompt=PROMPT_TEMPLATE.format(
-                error_report=state.get("error_report", ""),
-                hypotheses=state.get("hypotheses", "(nenhuma)"),
-                verification_notes=state.get("verification_notes", "(não executada)"),
-                digest=result["deep_dive_digest"],
-            ),
-            system=SYSTEM_PROMPT,
-        )
-        result.update(_parse_guess(raw))
+    if timeline["facts"].get("origin"):
+        result["error_origin"] = timeline["facts"]["origin"]
     return result
+
+
+def run_best_guess(state: dict, llm: LLMProvider) -> dict:
+    """Só quando o verificador não aceitou: obriga um melhor palpite com
+    confiança, em vez de terminar em "não temos certeza"."""
+    if state.get("verified"):
+        return state
+    raw = llm.generate(
+        prompt=PROMPT_TEMPLATE.format(
+            error_report=state.get("error_report", ""),
+            hypotheses=state.get("hypotheses", "(nenhuma)"),
+            verification_notes=state.get("verification_notes", "(não executada)"),
+            digest=state.get("deep_dive_digest", "(indisponível)"),
+        ),
+        system=SYSTEM_PROMPT,
+    )
+    return {**state, **_parse_guess(raw)}
