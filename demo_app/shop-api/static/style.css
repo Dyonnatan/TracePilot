@@ -430,6 +430,7 @@ textarea.input { resize: vertical; min-height: 6rem; }
 
 .rating { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-sm); color: var(--color-text-secondary); }
 .rating .icon { color: var(--color-accent-bronze); width: 14px; height: 14px; }
+.purchased-badge { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
 
 .price { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
 @media (min-width: 1024px) { .card-price .price { font-size: var(--font-size-xl); } }

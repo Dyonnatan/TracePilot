@@ -1,3 +1,5 @@
+import logging
+
 import httpx
 import psycopg
 import pytest
@@ -27,6 +29,9 @@ def orders(monkeypatch):
     monkeypatch.setattr(main.db, "list_products", lambda: list(PRODUCTS.values()))
     monkeypatch.setattr(main.db, "get_product", PRODUCTS.get)
     monkeypatch.setattr(
+        main.db, "get_last_purchase", lambda session_id, product_id: "2026-10-12T10:00:00+00:00" if session_id == "s-1" else None
+    )
+    monkeypatch.setattr(
         main.db, "get_products", lambda ids: {pid: PRODUCTS[pid] for pid in ids if pid in PRODUCTS}
     )
     monkeypatch.setattr(main.db, "get_coupon", COUPONS.get)
@@ -49,7 +54,9 @@ def test_products(client, orders):
 
 
 def test_product_detail(client, orders):
-    assert client.get("/products/1").json()["name"] == "Teclado mecânico"
+    body = client.get("/products/1").json()
+    assert (body["name"], body["purchased_at"]) == ("Teclado mecânico", None)
+    assert client.get("/products/1", headers={"X-Session-Id": "s-1"}).json()["purchased_at"].startswith("2026-10-12")
     assert client.get("/products/99").status_code == 404
 
 
@@ -135,6 +142,79 @@ def test_payment_timeout_returns_504(client, orders, monkeypatch):
     response = client.post("/checkout", json=cart((1, 1)))
     assert response.status_code == 504
     assert response.json()["detail"] == "pagamento indisponível"
+
+
+def test_payment_5xx_returns_502(client, orders, monkeypatch, caplog):
+    def upstream_error(order_ref, amount_cents):
+        request = httpx.Request("POST", "http://payment/authorize")
+        raise httpx.HTTPStatusError("503", request=request, response=httpx.Response(503, request=request))
+
+    monkeypatch.setattr(main.payment_client, "authorize", upstream_error)
+    response = client.post("/checkout", json=cart((1, 1)))
+    assert response.status_code == 502
+    assert response.json()["detail"] == "pagamento indisponível"
+    record = next(r for r in caplog.records if getattr(r, "event_type", None) == "payment.error")
+    assert getattr(record, "payment.upstream_status") == 503
+
+
+def test_n_plus_one_flag_queries_one_product_at_a_time(client, orders, monkeypatch):
+    calls = []
+    monkeypatch.setattr(main.db, "list_products_one_by_one", lambda: calls.append("list") or list(PRODUCTS.values()))
+    monkeypatch.setattr(
+        main.db,
+        "get_products_one_by_one",
+        lambda ids: calls.append("get") or {pid: PRODUCTS[pid] for pid in ids if pid in PRODUCTS},
+    )
+    assert client.get("/products").status_code == 200
+    assert client.post("/cart/quote", json=cart((1, 1))).status_code == 200
+    assert calls == []
+
+    main.faults.registry.set(main.faults.CATALOG_N_PLUS_ONE, True)
+    assert len(client.get("/products").json()) == 3
+    assert client.post("/cart/quote", json=cart((1, 1))).status_code == 200
+    assert calls == ["list", "get"]
+
+
+def test_unbounded_cache_grows_and_clears_on_disable(client, orders):
+    main.faults.registry.set(main.faults.PRODUCT_CACHE_UNBOUNDED, True, {"kb_per_request": 1})
+    for _ in range(3):
+        client.get("/products/1")
+    client.get("/products")
+    assert len(main.product_render_cache) == 4
+    assert all(len(value) == 1024 for value in main.product_render_cache.values())
+
+    main.faults.registry.set(main.faults.PRODUCT_CACHE_UNBOUNDED, False)
+    assert main.product_render_cache == {}
+
+
+def test_blocking_audit_sleeps_inside_request(client, orders, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(main.time, "sleep", sleeps.append)
+    client.get("/products")
+    assert sleeps == []
+
+    main.faults.registry.set(main.faults.AUDIT_SYNC_WRITE, True, {"sleep_ms": 150})
+    client.get("/products")
+    client.get("/health")
+    assert sleeps == [0.15]
+
+
+def test_chatty_logging_emits_debug_payload_lines(client, orders, caplog):
+    caplog.set_level(logging.INFO, logger="shop")
+    main.faults.registry.set(main.faults.DEBUG_PAYLOAD_LOGGING, True, {"lines": 5})
+    client.get("/products")
+    debug_lines = [r for r in caplog.records if getattr(r, "event_type", None) == "debug.payload"]
+    assert len(debug_lines) == 5
+
+
+def test_flag_change_logs_change_event(caplog):
+    caplog.set_level(logging.INFO, logger="shop")
+    main.faults.registry.set(main.faults.CATALOG_N_PLUS_ONE, True)
+    main.faults.registry.set(main.faults.CATALOG_N_PLUS_ONE, True)
+    changes = [r for r in caplog.records if getattr(r, "event_type", None) == "change.event"]
+    assert len(changes) == 1
+    assert getattr(changes[0], "change.type") == "feature_flag"
+    assert getattr(changes[0], "change.flag") == "catalog_n_plus_one"
 
 
 def test_db_lock_returns_503(client, orders, monkeypatch):

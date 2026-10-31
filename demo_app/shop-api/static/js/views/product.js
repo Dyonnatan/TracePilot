@@ -1,6 +1,6 @@
 import { api, track } from '../api.js';
 import { maxQuantity } from '../cart.js';
-import { h, icon, installment, money, pixPrice, rating, showError, skeleton, stepper, stockText } from '../ui.js';
+import { h, icon, installment, money, pixPrice, purchasedBadge, rating, showError, skeleton, stepper, stockText } from '../ui.js';
 import { addToCart } from './catalog.js';
 
 const TRUST = [
@@ -78,6 +78,7 @@ function productPage(product) {
       h('p', { class: 'eyebrow' }, product.category),
       h('h1', { class: 'pdp-title' }, product.name),
       rating(product),
+      purchasedBadge(product),
       h(
         'div',
         { class: 'pdp-price' },

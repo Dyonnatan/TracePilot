@@ -37,6 +37,12 @@ export const pixPrice = (cents) => Math.round(cents * (1 - PIX_DISCOUNT_PCT / 10
 export const orderCode = (orderId) => `#AS-${String(orderId).padStart(6, '0')}`;
 export const plural = (count, singular, pluralForm) => `${count} ${count === 1 ? singular : pluralForm}`;
 const ratingFormat = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const dateFormat = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+export function purchasedBadge(product) {
+  if (!product.purchased_at) return null;
+  return h('p', { class: 'purchased-badge' }, `Você comprou este produto em ${dateFormat.format(new Date(product.purchased_at))}`);
+}
 
 export function rating(product) {
   return h(

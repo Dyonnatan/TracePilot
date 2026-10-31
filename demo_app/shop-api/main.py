@@ -34,6 +34,7 @@ from opentelemetry.trace import Status, StatusCode  # noqa: E402
 from pydantic import BaseModel, Field, field_validator  # noqa: E402
 
 import db  # noqa: E402
+import faults  # noqa: E402
 import payment_client  # noqa: E402
 import pricing  # noqa: E402
 
@@ -47,6 +48,22 @@ checkout_requests = meter.create_counter(
 checkout_duration = meter.create_histogram(
     "shop.checkout.duration", unit="ms", description="Duração do checkout por resultado"
 )
+
+
+def observe_memory(_options: metrics.CallbackOptions):
+    statm = Path("/proc/self/statm")
+    if statm.exists():
+        resident_pages = int(statm.read_text().split()[1])
+        yield metrics.Observation(resident_pages * os.sysconf("SC_PAGE_SIZE"))
+
+
+meter.create_observable_gauge(
+    "process.memory.usage", callbacks=[observe_memory], unit="By", description="Memória residente (RSS) do processo"
+)
+
+# Flag product_cache_unbounded: a chave inclui o instante da requisição, então
+# nunca há hit e o cache só cresce.
+product_render_cache: dict[str, bytes] = {}
 
 session_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("session_id", default=None)
 
@@ -62,8 +79,33 @@ class SessionFilter(logging.Filter):
 logger.addFilter(SessionFilter())
 
 
+def log_flag_change(name: str, enabled: bool, config: dict) -> None:
+    logger.info(
+        "change.event feature flag %s %s",
+        name,
+        "ligada" if enabled else "desligada",
+        extra={
+            "event_type": "change.event",
+            "change.type": "feature_flag",
+            "change.service": "shop-api",
+            "change.flag": name,
+            "change.enabled": enabled,
+        },
+    )
+
+
+def drop_product_cache(name: str, enabled: bool, _config: dict) -> None:
+    if name == faults.PRODUCT_CACHE_UNBOUNDED and not enabled:
+        product_render_cache.clear()
+
+
+faults.registry.on_change(log_flag_change)
+faults.registry.on_change(drop_product_cache)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    faults_server = faults.start_server()
     logger.info(
         "change.event deploy shop-api %s: %s",
         SHOP_VERSION,
@@ -76,9 +118,34 @@ async def lifespan(_app: FastAPI):
         },
     )
     yield
+    faults_server.shutdown()
 
 
 app = FastAPI(title="TracePilot Reference Shop", version=SHOP_VERSION, lifespan=lifespan)
+
+
+# Declarado antes de session_context para rodar dentro dele (o último
+# middleware registrado é o mais externo) e herdar o session.id nos logs.
+@app.middleware("http")
+async def request_audit(request: Request, call_next):
+    if not request.url.path.startswith(("/static", "/health")):
+        if (config := faults.registry.config(faults.AUDIT_SYNC_WRITE)) is not None:
+            # Anti-pattern blocking_io: I/O síncrono dentro de código async
+            # trava o event loop e atrasa todas as requisições em paralelo.
+            with tracer.start_as_current_span("audit.write") as span:
+                span.set_attribute("audit.sink", "file")
+                time.sleep(float(config.get("sleep_ms", 150)) / 1000)
+        if (config := faults.registry.config(faults.DEBUG_PAYLOAD_LOGGING)) is not None:
+            for line in range(int(config.get("lines", 50))):
+                logger.info(
+                    "debug.payload %s %s headers=%s linha %d",
+                    request.method,
+                    request.url.path,
+                    dict(request.headers),
+                    line,
+                    extra={"event_type": "debug.payload", "http.route": request.url.path, "debug.line": line},
+                )
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -131,6 +198,17 @@ async def payment_timeout_handler(request: Request, exc: httpx.TimeoutException)
         extra=_log_extra(request, "payment.timeout"),
     )
     return _error_response(504, "pagamento indisponível", exc)
+
+
+@app.exception_handler(httpx.HTTPStatusError)
+async def payment_error_handler(request: Request, exc: httpx.HTTPStatusError):
+    upstream_status = exc.response.status_code
+    logger.error(
+        "payment.error payment-service respondeu %s",
+        upstream_status,
+        extra={**_log_extra(request, "payment.error"), "payment.upstream_status": upstream_status},
+    )
+    return _error_response(502, "pagamento indisponível", exc)
 
 
 @app.exception_handler(httpx.TransportError)
@@ -194,8 +272,16 @@ def health():
     return {"status": "ok", "version": SHOP_VERSION}
 
 
+def _cache_product_render(key: str) -> None:
+    if (config := faults.registry.config(faults.PRODUCT_CACHE_UNBOUNDED)) is not None:
+        product_render_cache[f"{key}:{time.time_ns()}"] = b"x" * (int(config.get("kb_per_request", 1024)) * 1024)
+
+
 @app.get("/products")
 def products():
+    _cache_product_render("catalog")
+    if faults.registry.enabled(faults.CATALOG_N_PLUS_ONE):
+        return db.list_products_one_by_one()
     return db.list_products()
 
 
@@ -204,7 +290,9 @@ def product(product_id: int):
     found = db.get_product(product_id)
     if found is None:
         raise HTTPException(status_code=404, detail="produto não encontrado")
-    return found
+    _cache_product_render(f"product:{product_id}")
+    session_id = session_id_var.get()
+    return {**found, "purchased_at": db.get_last_purchase(session_id, product_id) if session_id else None}
 
 
 @app.post("/cart/quote")
@@ -227,6 +315,9 @@ def checkout(payload: CartRequest):
     except httpx.TimeoutException:
         outcome = "payment_timeout"
         raise
+    except httpx.HTTPStatusError:
+        outcome = "payment_error"
+        raise
     except httpx.TransportError:
         outcome = "payment_unavailable"
         raise
@@ -241,7 +332,11 @@ def checkout(payload: CartRequest):
 
 def _price_cart(payload: CartRequest) -> tuple[list[dict], str | None, dict]:
     """Valida produtos e cupom e calcula o preço. Usado pelo carrinho e pelo checkout."""
-    products_by_id = db.get_products([item.product_id for item in payload.items])
+    product_ids = [item.product_id for item in payload.items]
+    if faults.registry.enabled(faults.CATALOG_N_PLUS_ONE):
+        products_by_id = db.get_products_one_by_one(product_ids)
+    else:
+        products_by_id = db.get_products(product_ids)
     lines = []
     for item in payload.items:
         found = products_by_id.get(item.product_id)
