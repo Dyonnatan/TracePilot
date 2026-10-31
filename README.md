@@ -46,14 +46,52 @@ Coletor TracePilot (local-agent)       App instrumentada (demo_app)
   OTel Collector  ──────▶  OpenObserve (armazenamento/consulta)
         │
         ▼
-  Orquestrador (LangGraph) ─┬─▶ logs_agent
-                            ├─▶ metrics_agent
-                            ├─▶ traces_agent
-                            ▼
-                     diagnosis_agent ──▶ verifier_agent ──▶ relatório
+  Orquestrador (LangGraph) ─▶ logs_agent ─▶ metrics_agent ─▶ traces_agent
+        │
+        ▼
+  timeline_agent ─▶ diagnosis_agent ─▶ verifier_agent ─▶ best_guess_agent
+        │
+        ▼
+  plain_summary_agent ─▶ report ─▶ relatório
 ```
 
 Detalhe módulo a módulo em [docs/code-architecture.md](docs/code-architecture.md).
+
+### Fluxo do agente, passo a passo
+
+Hoje o grafo (`agents/orchestrator.py::build_graph()`) é **linear e fixo**
+— o roteamento dinâmico (orquestrador decidindo a próxima etapa e podendo
+voltar a um especialista se o verificador rejeitar) é item de roadmap. A
+ordem real de execução é:
+
+1. **`orchestrator`** — ponto de entrada do grafo; hoje não decide nada
+   (TODO: roteamento dinâmico).
+2. **`logs_agent`**, **`metrics_agent`**, **`traces_agent`** — especialistas
+   que consultam o OpenObserve e resumem a evidência de cada fonte.
+3. **`timeline_agent`** — reconstrói, de forma determinística, a linha do
+   tempo entre serviços (24h, serviço informado + relacionados) e segue
+   cada rastro com erro até o span mais profundo que falhou — roda *antes*
+   do diagnóstico porque, rodando depois, o diagnóstico só via o serviço de
+   entrada e chutava o intermediário como causa.
+4. **`diagnosis_agent`** — consolida as evidências e a linha do tempo em
+   hipóteses de causa raiz.
+5. **`verifier_agent`** — confronta as hipóteses com a evidência real
+   (LLM de texto + checagem independente do `DecisionProvider`/Laya) e
+   aceita ou rejeita o diagnóstico.
+6. **`best_guess_agent`** — só entra em ação se o verificador não aceitou:
+   obriga o LLM a dar um palpite com confiança em %, citando a cadeia de
+   erro e a temporalidade, em vez de devolver "inconclusivo".
+7. **`plain_summary_agent`** — traduz o resultado técnico para linguagem
+   simples (causa, ações sugeridas) para quem não é especialista em
+   observabilidade.
+8. **`report`** — monta o prompt de correção (`fix_prompt.py`) e o
+   relatório final (`report.py`), persistido em `reports/`
+   (`report_store.py`).
+
+Mais contexto de design por módulo em
+[docs/code-architecture.md](docs/code-architecture.md) e a justificativa
+teórica (padrão Supervisor-Trabalhador, por que LangGraph) em
+[docs/architecture.md](docs/architecture.md).
 
 ## Estrutura do repositório
 
