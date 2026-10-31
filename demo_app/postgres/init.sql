@@ -83,3 +83,25 @@ INSERT INTO products (slug, name, category, description, specs, image, price_cen
 INSERT INTO coupons (code, discount_pct) VALUES
     ('DESC10', 10),
     ('GRATIS100', 100);
+
+-- Histórico de 2M pedidos de outras sessões, um item cada. A página de
+-- produto consulta "você comprou este produto" por session_id; sem o índice
+-- abaixo a consulta vira seq scan em orders (cenário missing_index). As duas
+-- tabelas precisam de volume, senão o planner começa pela menor e continua rápido.
+INSERT INTO orders (payment_method, subtotal_cents, shipping_cents, discount_cents, total_cents, session_id, created_at)
+SELECT 'card', 10000, 0, 0, 10000, md5(n::text), now() - (n % 365) * interval '1 day'
+FROM generate_series(1, 2000000) AS n;
+
+-- As FKs são válidas por construção; desligar os triggers de FK só durante a
+-- carga derruba o tempo do init de minutos para segundos.
+SET session_replication_role = replica;
+INSERT INTO order_items (order_id, product_id, quantity, unit_price_cents)
+SELECT o.id, p.id, 1, p.price_cents
+FROM orders o
+JOIN products p ON p.id = 1 + o.id % 8;
+RESET session_replication_role;
+
+CREATE INDEX orders_session_id_idx ON orders (session_id);
+
+VACUUM ANALYZE orders;
+VACUUM ANALYZE order_items;

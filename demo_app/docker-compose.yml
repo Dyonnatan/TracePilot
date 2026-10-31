@@ -18,10 +18,12 @@ services:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      # TCP: durante o init.sql o servidor temporário só escuta no socket unix.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U shop -d shop"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 180s
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.13.0
@@ -61,6 +63,9 @@ services:
     environment:
       TOXIPROXY_URL: http://toxiproxy:8474
       PAYMENT_INTERNAL_URL: http://payment-service:8001
+      # Porta interna de flags do shop-api (não publicada) e porta pública,
+      # alvo do tráfego de ataque dos cenários de segurança.
+      SHOP_INTERNAL_URL: http://shop-api:8081
       DATABASE_URL: postgresql://shop:${POSTGRES_PASSWORD:-shop}@postgres:5432/shop
     volumes:
       - ./scenarios:/scenarios:ro
@@ -70,6 +75,8 @@ services:
       postgres:
         condition: service_healthy
       toxiproxy:
+        condition: service_started
+      shop-api:
         condition: service_started
 
   loadgen:
