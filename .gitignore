@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Env / secrets
+.env
+*.local.env
+
+# OS
+.DS_Store
+
+# Reports gerados em runtime (manter a pasta, ignorar conteúdo)
+reports/*
+!reports/.gitkeep
+
+# Docker
+*.log

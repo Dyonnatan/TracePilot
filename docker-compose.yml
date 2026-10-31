@@ -1,0 +1,30 @@
+services:
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    container_name: tracepilot-openobserve
+    environment:
+      ZO_ROOT_USER_EMAIL: admin@tracepilot.local
+      ZO_ROOT_USER_PASSWORD: ChangeMe123!
+    ports:
+      - "5080:5080"
+    volumes:
+      - openobserve_data:/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: tracepilot-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    environment:
+      # base64 de "admin@tracepilot.local:ChangeMe123!" — troque se mudar as
+      # credenciais do OpenObserve acima
+      OPENOBSERVE_AUTH_B64: ${OPENOBSERVE_AUTH_B64:-YWRtaW5AdHJhY2VwaWxvdC5sb2NhbDpDaGFuZ2VNZTEyMyE=}
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    depends_on:
+      - openobserve
+
+volumes:
+  openobserve_data:

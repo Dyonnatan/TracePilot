@@ -1,0 +1,34 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  otlphttp/openobserve:
+    endpoint: http://openobserve:5080/api/default
+    headers:
+      Authorization: "Basic ${OPENOBSERVE_AUTH_B64}"
+
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve, debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/openobserve, debug]
