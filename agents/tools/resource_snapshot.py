@@ -13,12 +13,9 @@ detecção local via biblioteca padrão do Python, do host onde o *painel*
 está rodando (não necessariamente o mesmo host monitorado) e deixa isso
 explícito em `source`, nunca inventa um número.
 
-TODO: `OpenObserveClient.query_metrics` ainda não foi validado contra dado
-real (ver docstring do próprio client) — `_extract_numeric` abaixo tenta
-alguns nomes de campo plausíveis e volta `None` se nenhum bater, em vez de
-arriscar mostrar um valor errado. Assim que o `local-agent` rodar de
-verdade contra uma instância, confirmar o formato real de uma hit e
-ajustar `_VALUE_KEYS` — pra todas as métricas de uma vez, não uma por vez.
+Formato validado contra dado real do `local-agent` no OpenObserve: um
+stream por métrica, valor em `value`, `host_name` e `mount_point` como
+colunas (ver `OpenObserveClient.query_metrics`).
 """
 import os
 import platform
@@ -71,29 +68,36 @@ def _extract_text(hits: list[dict], keys: tuple[str, ...]) -> str | None:
     return None
 
 
+AGENT_FRESH_MINUTES = 5
+
+
 def _query_agent_metrics() -> dict | None:
-    """Uma única tentativa, um único try/except amplo (igual
-    `_openobserve_status` no webapp) — se o OpenObserve estiver fora do
-    ar, todas as 7 consultas falham do mesmo jeito, não precisa de 7
-    guardas separadas.
+    """Últimos pontos de cada métrica do agente, só da janela recente
+    (`AGENT_FRESH_MINUTES`) — dado velho não conta como "agente
+    reportando". Cada métrica é um stream próprio no OpenObserve; uma que
+    o agente não exporta (ex.: rede, hoje) não derruba as outras.
+    `None` só quando o OpenObserve inteiro está inacessível.
     """
     try:
         client = OpenObserveClient()
-        results = {}
-        for metric in (
-            CPU_METRIC,
-            MEM_USED_METRIC,
-            MEM_TOTAL_METRIC,
-            DISK_USED_METRIC,
-            DISK_TOTAL_METRIC,
-            NET_RX_METRIC,
-            NET_TX_METRIC,
-        ):
-            hits = client.query_metrics(metric, service=LOCAL_AGENT_SERVICE, size=5)
-            results[metric] = hits
-        return results
     except Exception:
         return None
+    start_us = int((time.time() - AGENT_FRESH_MINUTES * 60) * 1_000_000)
+    results = {}
+    failures = 0
+    metrics = (
+        CPU_METRIC, MEM_USED_METRIC, MEM_TOTAL_METRIC,
+        DISK_USED_METRIC, DISK_TOTAL_METRIC, NET_RX_METRIC, NET_TX_METRIC,
+    )
+    for metric in metrics:
+        try:
+            results[metric] = client.query_metrics(
+                metric, service=LOCAL_AGENT_SERVICE, start_time=start_us, size=10
+            )
+        except Exception:
+            results[metric] = []
+            failures += 1
+    return None if failures == len(metrics) else results
 
 
 def _local_disk_snapshot() -> list[dict]:
