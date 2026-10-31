@@ -182,6 +182,14 @@ details.more .field { margin-top: .75rem; }
 .checks .what { flex: 1; }
 .checks .what small { display: block; color: var(--ink-3); font-family: var(--mono); font-size: .8rem; }
 
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 1.6rem; }
+.option { background: var(--surface); padding: 1.2rem 1.25rem; min-width: 0; }
+.option h3, .option-title { font-size: 1.15rem; margin: .45rem 0 .3rem; }
+.option > p.muted { margin: 0 0 .4rem; font-size: .93rem; }
+.option-sub { margin: .9rem 0 0; font-size: .85rem; color: var(--ink-2); }
+.option .code pre { font-size: .78rem; }
+.option .hint { margin: .6rem 0 0; font-size: .82rem; color: var(--ink-3); font-family: var(--mono); }
+
 /* configurando */
 .scan-bar { height: 3px; background: var(--line-2); border-radius: 2px; overflow: hidden; }
 .scan-bar div { height: 100%; width: 0; background: var(--ink); transition: width .45s ease; }
@@ -404,7 +412,7 @@ summary { cursor: pointer; font-weight: 600; }
   .overview { grid-template-columns: 1fr; }
   .counts { justify-content: space-between; gap: 1rem; }
   .counts div { text-align: left; }
-  .compare, .pillars { grid-template-columns: 1fr; }
+  .compare, .pillars, .options { grid-template-columns: 1fr; }
   .investigate { flex-direction: column; }
   .scan li { grid-template-columns: 20px 1fr; }
   .scan .v { grid-column: 2; }

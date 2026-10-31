@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block container_class %}container {{ 'narrow' if step_index != 6 }}{% endblock %}
+{% block container_class %}container {{ 'narrow' if step_index not in (2, 6) }}{% endblock %}
 {% block content %}
 {% set steps = ["Início", "Sistema", "Instalação", "Repositório", "Conexão", "Análise", "Resumo"] %}
 <div class="steps" aria-hidden="true">

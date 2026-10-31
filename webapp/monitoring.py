@@ -166,25 +166,59 @@ def _worst(statuses: list[str]) -> str:
     return "unknown"
 
 
-def _connection(openobserve_up: bool, agent_reporting: bool, sources: dict | None) -> dict:
-    """Como o TracePilot está recebendo dados do sistema monitorado."""
-    channels = []
-    if agent_reporting:
-        channels.append("agente")
-    if sources and sources.get("direct_api"):
-        channels.append("API")
-    if sources and (sources.get("logs") or sources.get("traces")) and not sources.get("direct_api"):
-        channels.append("OTel")
-    receiving = bool(sources and (sources.get("logs") or sources.get("traces")))
+COLLECTOR_NAME = "TracePilot Collector"
+SOURCES_LIMIT = 200  # mesmo limite de OpenObserveClient.recent_sources
+API_NAME = "TracePilot API"
 
-    if not openobserve_up:
-        return {"status": "down", "text": "Fora do ar", "via": "", "channels": []}
-    if not channels:
-        return {"status": "warn", "text": "Sem dados", "via": "aguardando dados", "channels": []}
+
+def _connection(openobserve_up: bool, agent_reporting: bool, sources: dict | None, api_service: dict | None) -> dict:
+    """Como os dados chegam ao TracePilot, separado pelos dois caminhos:
+
+    - TracePilot Collector: agente instalado no servidor (recursos da máquina).
+    - TracePilot API: a aplicação envia logs/erros/rastros, em JSON
+      (`ingest/`, marca `tracepilot_ingest_mode`) ou em OTLP direto.
+
+    O armazenamento (OpenObserve) é um terceiro item, à parte: se ele
+    cair, nenhum dos dois caminhos consegue gravar nada.
+    """
+    logs = (sources or {}).get("logs", 0)
+    traces = (sources or {}).get("traces", 0)
+    api_receiving = bool(logs or traces)
+    api_format = "JSON" if (sources or {}).get("direct_api") else "OTLP"
+
+    collector = {
+        "name": COLLECTOR_NAME,
+        "status": "ok" if agent_reporting else "unknown",
+        "text": "enviando" if agent_reporting else "não instalado",
+        "detail": "CPU, memória e disco do servidor",
+    }
+    if api_receiving:
+        def count(n):  # a consulta traz no máximo SOURCES_LIMIT registros
+            return f"{n}+" if n >= SOURCES_LIMIT else str(n)
+        api = {"name": API_NAME, "status": "ok", "text": f"recebendo · {api_format}",
+               "detail": f"{count(logs)} logs · {count(traces)} rastros (15 min)"}
+    else:
+        api_up = (api_service or {}).get("up")
+        api = {"name": API_NAME, "status": "unknown", "text": "sem dados",
+               "detail": "logs, erros e rastros da aplicação"
+                         + ("" if api_up is None else (" · endpoint no ar" if api_up else " · endpoint desligado"))}
+    storage = {
+        "name": "Armazenamento",
+        "status": "ok" if openobserve_up else "down",
+        "text": "online" if openobserve_up else "indisponível",
+        "detail": "OpenObserve",
+    }
+
+    channels = [c["name"].replace("TracePilot ", "") for c in (collector, api) if c["status"] == "ok"]
     via = " + ".join(channels)
-    if receiving or agent_reporting:
-        return {"status": "ok", "text": "Conectado", "via": via, "channels": channels}
-    return {"status": "warn", "text": "Parcial", "via": via, "channels": channels}
+    if not openobserve_up:
+        status, text = "down", "Armazenamento indisponível"
+    elif channels:
+        status, text = "ok", "Conectado"
+    else:
+        status, text = "warn", "Sem dados"
+    return {"status": status, "text": text, "via": via, "channels": channels,
+            "collector": collector, "api": api, "storage": storage}
 
 
 def build_state(
@@ -196,6 +230,7 @@ def build_state(
     recent_errors: int | None,
     sources: dict | None = None,
     history: dict | None = None,
+    api_service: dict | None = None,
 ) -> dict:
     """Monta tudo o que o diagrama, os indicadores e os alertas precisam.
     Nunca levanta exceção por dado faltando."""
@@ -261,26 +296,19 @@ def build_state(
     ]
 
     # ---- TracePilot (conexão) ------------------------------------------
-    conn = _connection(openobserve.get("up", False), agent_reporting, sources)
-    tp_facts = [("Conexão", conn["text"]), ("Origem", conn["via"] or "—")]
-    tp_facts.append(("Agente instalado", "enviando dados" if agent_reporting else "não"))
-    if sources is not None:
-        tp_facts.append(("API de ingestão", "recebendo" if sources.get("direct_api") else "sem uso"))
-        tp_facts.append((
-            f"Registros ({RECENT_ERRORS_WINDOW_MIN} min)",
-            f"{sources.get('logs', 0)} logs · {sources.get('traces', 0)} rastros",
-        ))
+    conn = _connection(openobserve.get("up", False), agent_reporting, sources, api_service)
+    tp_facts = [(c["name"], c["text"]) for c in (conn["collector"], conn["api"], conn["storage"])]
     if conn["status"] == "down":
         alerts.append({
             "level": "warn", "node": "tracepilot",
-            "title": "TracePilot sem armazenamento",
+            "title": "Armazenamento do TracePilot indisponível",
             "action": "Suba o OpenObserve: docker compose up -d",
         })
     elif conn["status"] == "warn":
         alerts.append({
             "level": "warn", "node": "tracepilot",
             "title": "Nenhum dado chegando do sistema",
-            "action": "Instale o agente ou conecte a aplicação pela API.",
+            "action": f"Instale o {COLLECTOR_NAME} ou envie dados pela {API_NAME}.",
         })
 
     nodes = {
@@ -310,10 +338,10 @@ def build_state(
         },
         "tracepilot": {
             "title": "TracePilot",
-            "subtitle": ("via " + conn["via"]) if len(conn["channels"]) == 1 else (conn["via"] or conn["text"].lower()),
+            "subtitle": conn["via"] or ("sem dados" if conn["status"] == "warn" else "armazenamento fora"),
             "status": conn["status"],
             "status_text_override": conn["text"],
-            "what": "Recebe os dados, guarda o histórico e investiga problemas.",
+            "what": f"Recebe dados pelo {COLLECTOR_NAME} (servidor) e pela {API_NAME} (aplicação).",
             "facts": tp_facts,
         },
     }
@@ -386,5 +414,6 @@ def example_state() -> dict:
         agent_reporting=True,
         recent_errors=3,
         sources={"logs": 120, "traces": 340, "direct_api": False},
+        api_service={"up": True},
         history=store,
     )

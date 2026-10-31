@@ -85,9 +85,12 @@ def _query_agent_metrics() -> dict | None:
     start_us = int((time.time() - AGENT_FRESH_MINUTES * 60) * 1_000_000)
     results = {}
     failures = 0
+    # Rede fica de fora: o agente ainda não exporta (consultar um stream
+    # inexistente só gera erro no log do OpenObserve). A taxa de rede vem
+    # da medição local.
     metrics = (
         CPU_METRIC, MEM_USED_METRIC, MEM_TOTAL_METRIC,
-        DISK_USED_METRIC, DISK_TOTAL_METRIC, NET_RX_METRIC, NET_TX_METRIC,
+        DISK_USED_METRIC, DISK_TOTAL_METRIC,
     )
     for metric in metrics:
         try:

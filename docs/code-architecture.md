@@ -39,11 +39,20 @@ conecta a ele nesta versão. Quando o agente Rust não reporta,
 `resource_snapshot.py` mede CPU/RAM/rede (`/proc`) e GPU (`nvidia-smi`)
 do host do **painel**, sempre marcado como `source="local"` na tela.
 
-**Conexão no mapa**: o nó "TracePilot" diz se os dados estão chegando e
-por onde — `agente` (métricas do `local-agent` nos últimos 5 min),
-`API` (logs/spans com `tracepilot_ingest_mode=direct_api`, ver `ingest/`)
-ou `OTel` (logs/spans do serviço sem essa marca, ou seja, SDK do
-OpenTelemetry direto) — via `OpenObserveClient.recent_sources()`.
+**Os dois caminhos de dados, com nome de produto na interface**:
+
+- **TracePilot Collector** = `local-agent/`, instalado no servidor (CPU,
+  memória, disco). Ativo quando há métricas dele nos últimos 5 min.
+- **TracePilot API** = a aplicação envia logs/erros/rastros sem instalar
+  nada: JSON pela `ingest/` (marca `tracepilot_ingest_mode=direct_api`) ou
+  OTLP direto no collector. Ativo quando chegaram logs/spans do serviço
+  monitorado nos últimos 15 min (`OpenObserveClient.recent_sources()`).
+- **Armazenamento** (OpenObserve) aparece à parte: se ele cai, a tela diz
+  "Armazenamento indisponível", não "TracePilot fora do ar". A checagem
+  tenta duas vezes antes de declarar indisponível.
+
+Landing, instalação, conexão, resumo e o nó TracePilot do mapa usam esses
+mesmos três nomes.
 
 **Métricas no OpenObserve**: cada métrica OTLP vira um stream próprio
 (`system.cpu.usage_percent` → `system_cpu_usage_percent`), com o valor em

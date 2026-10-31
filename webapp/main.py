@@ -31,6 +31,11 @@ BASE_DIR = Path(__file__).resolve().parent
 DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8099")
 OPENOBSERVE_UI_URL = os.getenv("OPENOBSERVE_URL", "http://localhost:5080")
 MONITORED_SERVICE = os.getenv("MONITORED_SERVICE_NAME", "tracepilot-demo-app")
+# TracePilot API (ingest/): endereço interno para o health check e o
+# público mostrado na tela de instalação.
+INGEST_URL = os.getenv("TRACEPILOT_INGEST_URL", "http://localhost:8810").rstrip("/")
+INGEST_PUBLIC_URL = os.getenv("TRACEPILOT_INGEST_PUBLIC_URL", INGEST_URL).rstrip("/")
+OTLP_HTTP_PUBLIC_URL = os.getenv("TRACEPILOT_OTLP_PUBLIC_URL", "http://localhost:4318").rstrip("/")
 
 COOKIE_SESSION = "tp_session"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 dias
@@ -120,11 +125,24 @@ def _demo_app_status() -> dict:
 
 
 def _openobserve_status() -> dict:
+    """Uma falha isolada (timeout, OpenObserve ocupado) não basta para
+    declarar o armazenamento fora do ar — tenta de novo antes."""
+    for attempt in range(2):
+        try:
+            streams = OpenObserveClient().list_streams()
+            return {"up": True, "streams": streams, "url": OPENOBSERVE_UI_URL}
+        except Exception:
+            if attempt == 0:
+                time.sleep(0.3)
+    return {"up": False, "streams": [], "url": OPENOBSERVE_UI_URL}
+
+
+def _ingest_api_status() -> dict:
     try:
-        streams = OpenObserveClient().list_streams()
-        return {"up": True, "streams": streams, "url": OPENOBSERVE_UI_URL}
-    except Exception:
-        return {"up": False, "streams": [], "url": OPENOBSERVE_UI_URL}
+        resp = httpx.get(f"{INGEST_URL}/v1/health", timeout=2)
+        return {"up": resp.is_success, "url": INGEST_PUBLIC_URL}
+    except httpx.HTTPError:
+        return {"up": False, "url": INGEST_PUBLIC_URL}
 
 
 DEV_METHOD_LABELS = {
@@ -173,6 +191,7 @@ def _collect_state(snapshot: dict | None = None) -> dict:
         agent_reporting=resource_snapshot_tool.agent_is_reporting(snapshot),
         recent_errors=_recent_error_count() if openobserve["up"] else None,
         sources=_telemetry_sources() if openobserve["up"] else None,
+        api_service=_ingest_api_status(),
     )
 
 
@@ -263,6 +282,9 @@ def onboarding_install(request: Request):
             "step_index": 2,
             "preset": preset,
             "otlp_endpoint": preset.get("otlp_endpoint", "SEU-COLETOR:4317"),
+            "ingest_url": INGEST_PUBLIC_URL,
+            "otlp_http_url": OTLP_HTTP_PUBLIC_URL,
+            "service_name": _monitored_services()[0],
         },
     )
 

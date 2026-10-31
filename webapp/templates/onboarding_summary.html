@@ -21,9 +21,9 @@
     <span class="label">Conexão</span>
     <dl class="kv">
       <dt>Site</dt><dd class="st-{{ state.nodes.webapp.status }}">{{ 'no ar' if state.nodes.webapp.status != 'down' else 'fora do ar' }}</dd>
-      <dt>TracePilot</dt><dd class="st-{{ state.connection.status }}">{{ state.connection.text | lower }}</dd>
-      <dt>Origem</dt><dd>{{ state.connection.via or '—' }}</dd>
-      <dt>Agente</dt><dd class="{{ 'st-ok' if state.agent_reporting }}">{{ 'enviando' if state.agent_reporting else 'não instalado' }}</dd>
+      <dt>Collector</dt><dd class="{{ 'st-ok' if state.connection.collector.status == 'ok' }}">{{ state.connection.collector.text }}</dd>
+      <dt>API</dt><dd class="{{ 'st-ok' if state.connection.api.status == 'ok' }}">{{ state.connection.api.text }}</dd>
+      <dt>Armazenamento</dt><dd class="st-{{ state.connection.storage.status }}">{{ state.connection.storage.text }}</dd>
     </dl>
   </div>
   <div>

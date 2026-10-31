@@ -1,24 +1,45 @@
 {% extends "onboarding_base.html" %}
 {% block title %}Instalação · TracePilot{% endblock %}
+{% macro code(id, text) -%}
+<div class="code"><button type="button" class="copy-btn btn-line btn-sm" data-copy-target="{{ id }}">Copiar</button><pre id="{{ id }}">{{ text }}</pre></div>
+{%- endmacro %}
 {% block step %}
-<h1>Instale o agente</h1>
-<p class="lead">Rode no servidor do seu sistema. O agente só lê uso de CPU, memória e disco.</p>
+<h1>Conecte seus dados</h1>
+<p class="lead">Duas formas. Use uma ou as duas.</p>
 
 {% if preset.setup_commands %}
 <div class="step-block">
-  <span class="label">1 · Suba a loja de demonstração</span>
-  <div class="code"><button type="button" class="copy-btn btn-line" data-copy-target="setup-cmd">Copiar</button><pre id="setup-cmd">{{ preset.setup_commands }}</pre></div>
+  <span class="label">Antes · suba a loja de demonstração</span>
+  {{ code('setup-cmd', preset.setup_commands) }}
   {% if preset.setup_notes %}<p class="hint">{{ preset.setup_notes }}</p>{% endif %}
 </div>
 {% endif %}
 
-<div class="step-block">
-  <span class="label">{{ '2 · ' if preset.setup_commands }}Agente TracePilot</span>
-  <div class="code"><button type="button" class="copy-btn btn-line" data-copy-target="install-cmd">Copiar</button><pre id="install-cmd">cd local-agent && cargo build --release
-OTEL_EXPORTER_OTLP_ENDPOINT=http://{{ otlp_endpoint }} \
-OTEL_SERVICE_NAME=tracepilot-local-agent \
-./target/release/tracepilot-agent</pre></div>
-  <p class="hint">Sem permissão para instalar? Envie os dados pela API de ingestão (pasta ingest/).</p>
+<div class="options">
+  <section class="option">
+    <span class="label">Opção 1 · instalar no servidor</span>
+    <h3>TracePilot Collector</h3>
+    <p class="muted">Programa leve que roda na máquina. Envia CPU, memória e disco.</p>
+    {{ code('collector-cmd', 'cd local-agent && cargo build --release
+OTEL_EXPORTER_OTLP_ENDPOINT=http://' ~ otlp_endpoint ~ ' \\
+OTEL_SERVICE_NAME=tracepilot-local-agent \\
+./target/release/tracepilot-agent') }}
+  </section>
+
+  <section class="option">
+    <span class="label">Opção 2 · sem instalar nada</span>
+    <h3>TracePilot API</h3>
+    <p class="muted">Sua aplicação envia logs, erros e rastros direto.</p>
+    <p class="option-sub">Já usa OpenTelemetry? Aponte para:</p>
+    {{ code('api-otlp', 'OTEL_EXPORTER_OTLP_ENDPOINT=' ~ otlp_http_url) }}
+    <p class="option-sub">Ou envie JSON:</p>
+    {{ code('api-json', 'curl -X POST ' ~ ingest_url ~ '/v1/events \\
+  -H "Content-Type: application/json" \\
+  -d \'{"service": "' ~ service_name ~ '", "events": [
+        {"kind": "log", "severity": "ERROR",
+         "message": "checkout falhou"}]}\'') }}
+    {% if preset.setup_commands %}<p class="hint">A loja Apex já envia pela API (OpenTelemetry).</p>{% endif %}
+  </section>
 </div>
 
 <div class="actions"><a href="/onboarding/repo" class="btn btn-lg">Continuar</a></div>

@@ -5,19 +5,21 @@
 {% set web = state.nodes.webapp %}
 {% set conn = state.connection %}
 <h1>Conexão</h1>
-<p class="lead">Conferindo se tudo está falando com o TracePilot.</p>
+<p class="lead">Basta um dos dois caminhos estar ativo.</p>
 <ul class="checks">
   <li>
     <span class="what">Sistema no ar<small>{{ web.facts[0][1] }}</small></span>
-    {{ tag(web.status, web.status_text if web.status != 'ok' else 'respondendo') }}
+    {{ tag(web.status, 'respondendo' if web.status != 'down' else 'não respondeu') }}
   </li>
+  {% for c in [conn.collector, conn.api] %}
   <li>
-    <span class="what">TracePilot recebendo dados<small>{{ conn.via or '—' }}</small></span>
-    {{ tag(conn.status, conn.text) }}
+    <span class="what">{{ c.name }}<small>{{ c.detail }}</small></span>
+    {{ tag(c.status, c.text) }}
   </li>
+  {% endfor %}
   <li>
-    <span class="what">Agente instalado<small>CPU, memória e disco</small></span>
-    {{ tag('ok' if state.agent_reporting else 'unknown', 'enviando' if state.agent_reporting else 'ainda não') }}
+    <span class="what">Armazenamento<small>{{ conn.storage.detail }}</small></span>
+    {{ tag(conn.storage.status, conn.storage.text) }}
   </li>
 </ul>
 <div class="actions">
