@@ -142,7 +142,10 @@ def build_timeline(client: OpenObserveClient, services: list[str], end_us: int |
             sample = next(o for o in origins if (o["service"], o["operation"], (o["exception"] or {}).get("type")) == top)
             exc = sample["exception"]
             facts["origin"] = sample
-            events.append({"t": first, "kind": "origin",
+            # Horário do próprio rastro analisado (não do primeiro erro da
+            # janela, que pode ser de outro incidente mais antigo).
+            origin_t = next((e["_timestamp"] / 1e6 for e in errors if e.get("trace_id") == sample["trace_id"]), first)
+            events.append({"t": origin_t, "kind": "origin",
                            "text": f"Origem: {sample['service']} → {sample['operation']}"
                                    + (f" lançou {exc['type']}: {exc['message'][:120]}" if exc else " falhou")})
 
@@ -190,13 +193,33 @@ def build_timeline(client: OpenObserveClient, services: list[str], end_us: int |
         if v.get("v"):
             by_service[v["service_name"]].append(v)
     facts["versions"] = {s: sorted([(x["v"], x["first_seen"] / 1e6) for x in vs], key=lambda t: t[1]) for s, vs in by_service.items()}
+    # (horário, rota, versão) de cada erro do serviço de entrada — a versão
+    # vem do próprio span (resource service.version).
+    error_pts = [(e["_timestamp"] / 1e6,
+                  e.get("http_route") or e.get("http_target") or e.get("operation_name"),
+                  e.get("service_service_version"))
+                 for e in errors]
+    facts["suspect_deploys"] = []
     for service, vs in facts["versions"].items():
         for i, (ver, seen) in enumerate(vs):
             if i == 0:
                 continue
-            suspect = facts.get("first_error") and 0 <= facts["first_error"] - seen <= DEPLOY_SUSPECT_MINUTES * 60
-            events.append({"t": seen, "kind": "deploy",
-                           "text": f"Deploy: {service} {vs[i-1][0]} → {ver}" + (" (pouco antes dos erros)" if suspect else "")})
+            prev = vs[i - 1][0]
+            text = f"Deploy: {service} {prev} → {ver}"
+            # Suspeito = numa rota, a versão nova erra bem mais que a anterior
+            # nos 30 min antes do deploy. Comparar por versão (e não só por
+            # horário) não se confunde com erro isolado ou outro incidente.
+            win = DEPLOY_SUSPECT_MINUTES * 30
+            new_by_route = Counter(r for t, r, v in error_pts if v == ver and seen <= t < seen + win)
+            old_by_route = Counter(r for t, r, v in error_pts if v == prev and seen - win <= t < seen)
+            worse = [(r, n, old_by_route.get(r, 0)) for r, n in new_by_route.items()
+                     if n >= 3 and n > 2 * old_by_route.get(r, 0)]
+            if service == entry and worse:
+                route, n, old = max(worse, key=lambda w: w[1])
+                text += f" — com a versão nova, {route} passou a falhar ({n} erros; {old} na versão anterior)"
+                facts["suspect_deploys"].append({"service": service, "from": prev, "to": ver,
+                                                 "at": seen, "route": route, "after": n, "before": old})
+            events.append({"t": seen, "kind": "deploy", "text": text})
 
     # 6. Logs de erro de todos os serviços, agrupados por mensagem.
     logs = _search(client, "logs",
@@ -256,6 +279,9 @@ def digest(timeline: dict) -> str:
     for service, vs in f.get("versions", {}).items():
         if len(vs) > 1:
             lines.append(f"Versões de {service} na janela: " + ", ".join(f"{v} (desde {_fmt_ts(t)})" for v, t in vs))
+    for d in f.get("suspect_deploys", []):
+        lines.append(f"DEPLOY SUSPEITO: {d['service']} {d['from']} → {d['to']} em {_fmt_ts(d['at'])}; "
+                     f"com a versão nova, a rota {d['route']} passou a falhar ({d['after']} erros; {d['before']} na versão anterior nos 30 min antes).")
     for g in f.get("log_groups", [])[:5]:
         lines.append(f"Log {g['severity']} em {g['service']} ({g['count']}×, desde {_fmt_ts(g['first'])}): {g['message']}")
     lines.append("Linha do tempo:")
