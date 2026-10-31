@@ -8,9 +8,8 @@
 > scaffold (ver [architecture.md](architecture.md) e
 > [code-architecture.md](code-architecture.md)).
 >
-> Cobertura atual: **Capítulo 1** (fundamentos de sistemas de agentes).
-> Capítulo 2 (arquiteturas de agentes) entra numa próxima atualização deste
-> documento.
+> Cobertura atual: **Capítulos 1 e 2** (fundamentos de sistemas de agentes;
+> arquiteturas de agentes).
 
 ## Capítulo 1 — Fundamentos de sistemas de agentes
 
@@ -150,9 +149,154 @@ TracePilot já adota.
 
 ---
 
-## Próxima atualização deste documento
+## Capítulo 2 — Arquiteturas de agentes
 
-Cole aqui (ou me envie) o conteúdo do **Capítulo 2 — Arquiteturas de
-Agentes** (reflexiva, baseada em modelo, híbrida, critérios de escolha e
-padrões de projeto) para eu completar este glossário com a mesma
-abordagem — síntese própria + aplicação direta ao TracePilot.
+> Enquanto o Capítulo 1 classifica agentes por *capacidade* (os 5 tipos),
+> o Capítulo 2 olha para a *estrutura interna*: como o agente é organizado
+> para transformar percepção em ação. Três categorias — reflexiva, baseada
+> em modelo e híbrida — mais os critérios para escolher entre elas e os
+> padrões de projeto recorrentes.
+
+### 2.1 Arquitetura reflexiva
+
+A forma mais simples: decide **só** com a percepção atual, aplicando
+regras fixas de condição→ação, sem memória nem modelo do mundo. Rápida,
+barata de construir e ideal quando o ambiente é totalmente observável e a
+velocidade de resposta importa mais do que sofisticação — mas falha em
+ambientes parciais/dinâmicos, porque não "lembra" nada e não planeja.
+Exemplos clássicos: termostato, robô aspirador que só reage a colisão,
+chatbot que responde sempre a mesma coisa para o mesmo gatilho.
+
+**Aplicação ao TracePilot**: nenhum agente do TracePilot é puramente
+reflexivo — mas a falha controlada do `demo_app` (`ZeroDivisionError`
+quando `quantity == 0`) é, ela mesma, uma regra reflexiva clássica
+(condição fixa → efeito fixo), o que é proposital: serve como "gabarito"
+determinístico para os agentes investigarem.
+
+### 2.2 Arquitetura baseada em modelo (estado interno, planejamento simples)
+
+Acrescenta ao agente um **estado interno** que é atualizado a cada
+percepção — um "modelo do mundo" que permite lembrar o que já aconteceu e
+inferir o que não está diretamente observável agora. Com esse estado, o
+agente consegue formas simples de planejamento (simular mentalmente o
+efeito de uma ação antes de agir) e evitar repetir trabalho. Custo: mais
+complexidade computacional e risco de o modelo interno ficar desatualizado
+ou errado. Exemplos: aspirador que constrói um mapa do cômodo, NPC de jogo
+que lembra jogadas anteriores, agente conversacional com memória/contexto.
+
+**Aplicação ao TracePilot**: este é o mapeamento mais direto do capítulo —
+o `IncidentState` (TypedDict) do `agents/orchestrator.py` **é** esse
+estado interno/modelo do mundo: ele acumula `evidence_logs`,
+`evidence_metrics`, `evidence_traces` e `hypotheses` conforme cada
+especialista roda, exatamente como a arquitetura baseada em modelo
+descreve — cada nó do grafo não decide só com sua própria percepção
+(a fonte de dados que ele consulta), mas também com o que os nós
+anteriores já registraram no estado compartilhado.
+
+### 2.3 Arquitetura híbrida (deliberação + reação)
+
+Combina uma **camada reativa** (respostas rápidas e de baixo nível a
+estímulos urgentes), uma **camada deliberativa** (raciocínio de alto
+nível, planejamento orientado a objetivos, usa o modelo do mundo) e,
+frequentemente, uma **camada de coordenação** que faz a mediação entre as
+duas — decide quando a reação tem prioridade e quando seguir o plano.
+Permite ao agente não ficar nem "paralisado pensando" nem "agindo de forma
+míope". Exemplo citado: um carro autônomo que reage em milissegundos a um
+obstáculo (reativo) mas também planeja a rota ótima até o destino
+(deliberativo). A arquitetura **BDI** (*Belief-Desire-Intention* — crenças,
+desejos, intenções) é apontada como um exemplo consagrado desse estilo
+híbrido/deliberativo.
+
+**Aplicação ao TracePilot**: dá vocabulário preciso para descrever o
+`orchestrator_node` como camada de coordenação (hoje simples, mas o TODO
+já registrado em `code-architecture.md` é justamente fazê-lo decidir
+dinamicamente — um papel de coordenação de verdade) mediando entre os
+especialistas (mais próximos de execução/reação a uma consulta pontual) e
+o par diagnóstico+verificador (a camada deliberativa, que raciocina sobre
+o estado acumulado para formar e checar hipóteses).
+
+### 2.4 Como escolher a arquitetura para cada problema
+
+Quatro critérios guiam a escolha, sem resposta única:
+
+1. **Complexidade/dinamismo do ambiente** — ambiente simples e estático →
+   reflexivo basta; ambiente complexo/dinâmico → precisa de estado
+   interno (modelo) ou mais.
+2. **Disponibilidade de dados/conhecimento do domínio** — muito dado e
+   domínio bem modelado favorece arquiteturas baseadas em modelo; baixa
+   observabilidade praticamente exige estado interno, senão o agente fica
+   "cego" para o que não está na percepção do instante.
+3. **Requisitos de latência** — tempo real/quase real favorece reativo (ou
+   a camada reativa de um híbrido); se um atraso de segundos for
+   aceitável, arquiteturas deliberativas são viáveis. É literalmente
+   uma decisão de SLO/SLA.
+4. **Custo de desenvolvimento e computação** — reflexivo é mais barato de
+   construir e rodar; modelo/planejamento/aprendizado custam mais
+   (memória, busca, chamadas a LLM, bases vetoriais). Regra prática: um
+   MVP costuma começar reativo e evoluir para memória/planejamento por
+   iteração, só quando necessário.
+
+**Aplicação ao TracePilot**: usando a própria classificação de ambiente do
+Capítulo 1 (já aplicada no glossário acima — investigação de incidente é
+parcialmente observável, estocástica, sequencial, dinâmica e
+multiagente), os quatro critérios deste capítulo convergem para a mesma
+conclusão: **não cabe arquitetura reflexiva** (ambiente complexo/parcial
+demais) nem exige velocidade de milissegundos (diagnóstico tolera
+segundos/minutos de deliberação, ao contrário de um carro autônomo) — ou
+seja, o critério de latência *permite* ir além do reativo, e o critério de
+complexidade *exige* isso. Esse é um argumento direto e citável no pitch
+para justificar a escolha por uma arquitetura baseada em modelo +
+deliberação (via LangGraph), em vez de um agente reativo simples ou um
+único prompt.
+
+### 2.5 Padrões de projeto para agentes
+
+Três padrões recorrentes para organizar agentes e sistemas multiagentes —
+não são mutuamente exclusivos, sistemas complexos costumam combinar os
+três:
+
+- **Planejador-Executor**: separa quem planeja (recebe um objetivo,
+  produz um plano/sequência de subtarefas) de quem executa (realiza cada
+  passo do plano, possivelmente chamando ferramentas). Ganha-se controle
+  e verificação de qualidade — o plano pode ser checado antes de rodar, e
+  a execução pode ter salvaguardas por passo.
+- **Supervisor-Trabalhador**: um agente supervisor decompõe o problema em
+  subtarefas, delega a agentes trabalhadores especializados, monitora o
+  progresso e agrega os resultados. Espelha uma hierarquia
+  gerente/equipe: dá paralelismo (trabalhadores em paralelo) e controle
+  central (o supervisor aplica políticas e checa qualidade). O próprio
+  material usa, como exemplo ilustrativo, um sistema multiagente de
+  análise financeira com um supervisor delegando a trabalhadores
+  especializados (coleta de dados, cálculo de indicadores, visualização)
+  — estrutura quase idêntica ao desenho do TracePilot.
+- **Agente com Ferramentas/Skills**: em vez de embutir todo conhecimento
+  no agente central, ele aciona ferramentas/serviços externos (busca,
+  calculadora, banco de dados, API) para subtarefas fora de sua
+  competência nativa — o padrão por trás do "tool calling" em frameworks
+  como LangChain. Ganha-se modularidade: novas skills se desenvolvem e se
+  plugam independentemente.
+
+**Aplicação ao TracePilot**: os três padrões já aparecem simultaneamente
+no scaffold atual, o que vale a pena nomear explicitamente no pitch:
+
+| Padrão | Onde está no TracePilot |
+|---|---|
+| Supervisor-Trabalhador | `orchestrator.py` (supervisor) + `logs_agent`/`metrics_agent`/`traces_agent` (trabalhadores especializados) |
+| Planejador-Executor | Hoje o "plano" é fixo (fluxo linear no grafo); o TODO de roteamento dinâmico no `orchestrator_node` é exatamente evoluir para um planejador de verdade, que decide a sequência de subtarefas por incidente, separado da execução de cada especialista |
+| Ferramentas/Skills | `agents/tools/openobserve_client.py` é a "ferramenta" que os especialistas acionam para consultar logs/métricas/traces — mesmo padrão de tool-calling do LangChain/LangGraph |
+
+Isso dá uma resposta direta e bem fundamentada para "por que essa
+arquitetura e não outra mais simples": o TracePilot não inventa um
+desenho novo — combina três padrões já consolidados na literatura de
+agentes, cada um resolvendo um problema específico de organização
+(delegação, planejamento, acesso a dados externos).
+
+---
+
+## Fontes
+
+Síntese própria a partir de: ebook "Agentes de Inteligência Artificial"
+(AKCIT/UFG), capítulos 1 e 2; e do cheatsheet "Agentes de Inteligência
+Artificial" do mesmo programa. Nenhum trecho é cópia literal do material
+original — definições e exemplos foram reescritos e reorganizados em
+função da arquitetura do TracePilot.
