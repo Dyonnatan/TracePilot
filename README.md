@@ -31,7 +31,8 @@ mudar a hipótese e exigir checar outra fonte. Um agente **orquestrador**
 (padrão Supervisor-Trabalhador) coordena **especialistas** em logs,
 métricas e traces; um agente de **diagnóstico** consolida hipóteses; e um
 **verificador** questiona conclusões sem evidência suficiente. Mais
-detalhes em [docs/architecture.md](docs/architecture.md).
+detalhes em [docs/architecture.md](docs/architecture.md) e nomenclatura/
+fundamentação teórica em [docs/glossario-conceitos-ia.md](docs/glossario-conceitos-ia.md).
 
 ## Arquitetura (visão rápida)
 
@@ -59,7 +60,7 @@ TracePilot/
 ├── demo_app/           # app FastAPI instrumentada, com falhas controladas
 ├── benchmark/          # notas de avaliação (OpenRCA)
 ├── reports/             # relatórios de incidente gerados
-├── docs/                 # arquitetura geral e de código
+├── docs/                 # arquitetura geral, de código e glossário de conceitos
 ├── docker-compose.yml    # OpenObserve + OTel Collector
 └── otel-collector-config.yaml
 ```
