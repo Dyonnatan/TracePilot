@@ -18,8 +18,9 @@ flowchart LR
     end
     subgraph control [Fora da telemetria]
         Chaos[chaos-control] -->|"toxic latency"| Toxi
-        Chaos -->|"LOCK TABLE"| Pg
-        Chaos -->|"/internal/cpu-burn"| Pay
+        Chaos -->|"LOCK TABLE / índice INVALID"| Pg
+        Chaos -->|"/internal/cpu-burn, /internal/faults"| Pay
+        Chaos -->|"feature flags :8081"| Shop
         Yaml["scenarios/*.yaml"] --> Chaos
     end
     Shop -->|OTLP| Collector[OTel Collector]
@@ -32,10 +33,10 @@ flowchart LR
 |---|---|
 | `shop-api` | FastAPI: loja web Apex Space, catálogo (`/products`, `/products/{id}`), cotação do carrinho (`/cart/quote`), checkout, eventos de jornada (`/rum/events`) e relato de problema (`/support/report`). |
 | `payment-service` | FastAPI: autorização de pagamento com score de fraude CPU-bound. Limite de 0.5 core. |
-| `postgres` | Catálogo (9 produtos), cupons `DESC10` e `GRATIS100`, pedidos e itens (`postgres/init.sql`). |
+| `postgres` | Catálogo (9 produtos), cupons `DESC10` e `GRATIS100`, pedidos e itens (`postgres/init.sql`), com ~2M pedidos de histórico para o "Você comprou este produto em ..." da página de produto (consulta por `session_id`). |
 | `toxiproxy` | Proxy de rede entre shop-api e payment-service; é onde a latência é injetada. |
 | `loadgen` | Tráfego de base (~2 req/s, User-Agent `tracepilot-loadgen`): vitrine, produto, cotação e checkout com 1 a 3 itens. Nunca usa o cupom `GRATIS100`. |
-| `chaos-control` | Painel do apresentador. Sem OpenTelemetry: nada que ele faz aparece no OpenObserve. |
+| `chaos-control` | Painel do apresentador. Sem OpenTelemetry: nada que ele faz aparece no OpenObserve. Liga as feature flags do shop-api por uma porta interna (8081, não publicada e sem OTel) e as falhas do payment-service por `/internal/faults` (fora da telemetria). |
 
 Telemetria: o `docker-compose.yml` daqui entra na rede `tracepilot` criada
 pelo `docker-compose.yml` da raiz e exporta para o mesmo `otel-collector`.
@@ -67,7 +68,9 @@ pertence ao compose da raiz.
 
 O `postgres/init.sql` só roda com o volume vazio. Depois de mudar o schema
 ou o catálogo, rode `make reset-db`: ele recria o Postgres do zero (apaga
-os pedidos) e o `make up` seguinte reconstrói o shop-api.
+os pedidos) e o `make up` seguinte reconstrói o shop-api. A carga do
+histórico de pedidos leva de 1 a 2 minutos; o healthcheck só libera o
+Postgres quando ela termina.
 
 ### Loja
 
@@ -89,9 +92,15 @@ inline "Não consegui concluir a operação.", com o código de suporte (o
 
 | Cenário | Onde o alerta aparece |
 |---|---|
-| `payment_latency`, `cpu_saturation` | **Finalizar pedido** no checkout |
+| `payment_latency`, `cpu_saturation`, `retry_storm` | **Finalizar pedido** no checkout |
+| `payment_errors` | **Finalizar pedido**, em ~30% das tentativas |
 | `db_lock` | Vitrine, página de produto, carrinho, **Aplicar** cupom e checkout |
 | `coupon_bug` | **Aplicar** com o cupom `GRATIS100` (carrinho ou checkout) |
+
+Os anti-patterns de desempenho (`n_plus_one`, `missing_index`,
+`blocking_io`, `memory_leak`, `chatty_logging`) não mostram alerta: a loja
+fica lenta ou consome mais recurso, e o sinal está nos traces, métricas e
+volume de log.
 
 ### Importar o dashboard
 
@@ -119,10 +128,17 @@ diagnóstico dos agentes. A tabela abaixo é gerada a partir deles com
 <!-- scenarios:start -->
 | Cenário | Categoria | Como ativar | TTL | Sintoma do usuário | Causa raiz (gabarito) |
 |---|---|---|---|---|---|
+| `blocking_io` | performance_antipattern | Painel chaos-control | 120 s | Todas as páginas e ações da loja ficam mais lentas ao mesmo tempo, sem erro. Com mais de um usuário navegando, a lentidão piora. | A feature flag audit_sync_write ligou uma escrita de auditoria síncrona (bloqueante) dentro de um middleware async. Ela trava o event loop do uvicorn e serializa as requisições do shop-api. |
+| `chatty_logging` | performance_antipattern | Painel chaos-control | 120 s | A loja fica um pouco mais lenta, sem erro. O custo aparece na conta de ingestão de logs, não para o usuário. | A feature flag debug_payload_logging ligou log de debug em produção: ~50 linhas debug.payload por requisição, incluindo headers. O custo está no volume de ingestão e no risco de vazar dados em log. |
 | `coupon_bug` | code_change | `make deploy-bad` | manual | Clientes que aplicam o cupom GRATIS100 no carrinho (botão "Aplicar") recebem "Não consegui concluir a operação". Compras sem cupom ou com DESC10 funcionam. | O deploy 1.1.0 introduziu em pricing.py o cálculo do preço original a partir do total com desconto (total / (1 - desconto)). Com o cupom GRATIS100 o desconto é 100% e a divisão por zero gera ZeroDivisionError. |
 | `cpu_saturation` | host_resource | Painel chaos-control | 120 s | "Finalizar pedido" fica lento e parte das tentativas termina com "Não consegui concluir a operação". Não há mensagem de erro específica. | Processos consumindo CPU dentro do container do payment-service, que tem limite de 0.5 CPU. O throttling deixa o cálculo de fraude (CPU-bound) lento e o shop-api estoura o timeout de pagamento. |
 | `db_lock` | database | Painel chaos-control | 120 s | A vitrine e a página de produto não carregam; abrir o carrinho, aplicar cupom e finalizar o pedido falham com "Não consegui concluir a operação" depois de ~2 s de espera. | Uma transação de manutenção (application_name=inventory-maintenance) segura um lock ACCESS EXCLUSIVE na tabela products. As consultas do shop-api ficam bloqueadas até o statement_timeout de 2 s e são canceladas. |
+| `memory_leak` | performance_antipattern | Painel chaos-control | 180 s | Nada visível no início. Com o tempo o shop-api fica mais lento e, se o cenário ficar ligado tempo demais, o container pode ser encerrado por falta de memória. | A feature flag product_cache_unbounded ligou um cache de renderização de produto sem limite e com chave por instante da requisição. Ele nunca tem hit e só cresce, vazando memória a cada GET /products e GET /products/{id}. |
+| `missing_index` | database | Painel chaos-control | 120 s | A página de produto fica mais lenta para abrir, principalmente com várias pessoas navegando. Vitrine, carrinho e checkout estão normais. | O índice orders_session_id_idx ficou INVALID, o estado que um REINDEX CONCURRENTLY interrompido de uma rotina de manutenção (application_name=inventory-maintenance) deixa. O planner ignora índices inválidos, então a consulta "você comprou este produto" da página de produto, que filtra pedidos por session_id, virou um seq scan em ~2M pedidos. Correção: REINDEX INDEX CONCURRENTLY orders_session_id_idx. |
+| `n_plus_one` | performance_antipattern | Painel chaos-control | 120 s | A vitrine e o carrinho ficam visivelmente mais lentos para carregar, mas continuam funcionando. Nenhuma mensagem de erro. | A feature flag catalog_n_plus_one foi ligada no shop-api e trocou a consulta em lote do catálogo por uma consulta (e uma conexão) por produto, o anti-pattern N+1. |
+| `payment_errors` | dependency | Painel chaos-control | 120 s | Cerca de 1 em cada 3 tentativas de "Finalizar pedido" termina com "Não consegui concluir a operação", na hora, sem espera. Tentar de novo às vezes funciona. Vitrine, produto, carrinho e cupom estão normais. | O adquirente (span acquirer.charge dentro do payment-service) está recusando ~30% das cobranças com AcquirerUnavailable. O payment-service devolve 503 e o shop-api traduz para 502. Não é rede nem timeout: as respostas chegam rápido, só que com erro. |
 | `payment_latency` (protagonista) | network | Painel chaos-control | 120 s | Todo "Finalizar pedido" termina com "Não consegui concluir a operação". Vitrine, página de produto, carrinho e cupom continuam funcionando. | Latência de 1500 ms no caminho de rede entre shop-api e payment-service (proxy de rede), acima do timeout de 1000 ms do cliente de pagamento. O payment-service está saudável; o problema é a rede entre os serviços. |
+| `retry_storm` | performance_antipattern | Painel chaos-control | 120 s | "Finalizar pedido" demora vários segundos; a maioria acaba concluindo, mas algumas tentativas ainda falham com "Não consegui concluir a operação". | Duas causas combinadas. A rede até o payment-service ficou lenta (~1000 ms com jitter, perto do timeout de 1000 ms) e a feature flag payment_retry_no_backoff faz o shop-api repetir a autorização até 5 vezes sem backoff, multiplicando a carga sobre a dependência lenta. |
 <!-- scenarios:end -->
 
 Falhas do painel desligam sozinhas ao fim do TTL e podem ser desligadas
@@ -132,6 +148,15 @@ remanescente.
 O `coupon_bug` é um deploy de verdade: `make deploy-bad` recria o shop-api
 com `SHOP_VERSION=1.1.0`, o que muda o `service.version` da telemetria e
 gera o log `change.event` no startup. `make deploy-good` volta para a 1.0.0.
+
+Os anti-patterns do shop-api são feature flags (`catalog_n_plus_one`,
+`audit_sync_write`, `product_cache_unbounded`, `payment_retry_no_backoff`,
+`debug_payload_logging`). Ligar ou desligar uma flag gera o log
+`change.event` com `change.type=feature_flag` e `change.flag`, como uma
+ferramenta de feature flag faria. `payment_errors` (falha no adquirente) e
+`missing_index` (índice deixado INVALID por uma manutenção interrompida)
+são silenciosos de propósito: não deixam `change.event`. O `retry_storm` combina a flag de
+retry sem backoff com latência de ~1000 ms (jitter de 300 ms) no toxiproxy.
 
 ## Roteiro do pitch (`payment_latency`)
 
@@ -175,13 +200,20 @@ do payment-service também fica longo e a CPU do container bate no limite de
 |---|---|---|
 | Traces | stream `default` (traces) | `service_name`, `operation_name`, `duration` (µs), `span_status`, `service_service_version` |
 | Logs | stream `default` (logs) | `event_type`, `session_id`, `trace_id`, `service_name`, `service_version`, `exception_type` |
-| Métricas de app | `shop_checkout_requests`, `shop_checkout_duration`, `payment_client_duration`, `http_server_duration` | atributo `outcome` |
+| Métricas de app | `shop_checkout_requests`, `shop_checkout_duration`, `payment_client_duration`, `http_server_duration` | atributo `outcome`; `payment_client_duration` também tem `attempt` (uma medição por tentativa) |
+| Memória do shop-api | `process_memory_usage` (RSS, bytes) | `service_name` |
 | Containers | `container_cpu_usage_total`, `container_memory_usage_total`, ... | `container_name` |
 | Host | `system_cpu_time`, `system_memory_usage`, ... | — |
 
 Valores de `event_type` nos logs: `change.event`, `checkout.success`,
-`payment.timeout`, `payment.unavailable`, `db.unavailable`,
-`unhandled.error`, `payment.authorized`, `rum.event`, `user.report`.
+`payment.timeout`, `payment.unavailable`, `payment.error`,
+`db.unavailable`, `unhandled.error`, `payment.authorized`,
+`acquirer.unavailable`, `debug.payload`, `rum.event`, `user.report`.
+
+Valores de `outcome` em `shop_checkout_requests`: `success`, `rejected`,
+`error`, `payment_timeout`, `payment_error` (payment-service respondeu 5XX),
+`payment_unavailable`, `db_unavailable`. Em `payment_client_duration`:
+`success`, `timeout`, `http_error`, `error`.
 
 Valores de `rum_type` nos logs `rum.event` (jornada da loja): `page_view`,
 `product_view`, `cart_add`, `cart_view`, `coupon_apply`, `checkout_view`,

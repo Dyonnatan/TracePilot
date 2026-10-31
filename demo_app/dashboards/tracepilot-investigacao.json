@@ -21,7 +21,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT histogram(_timestamp) AS x_axis_1, event_type AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE event_type IN ('checkout.success', 'payment.timeout', 'payment.unavailable', 'db.unavailable', 'unhandled.error') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, event_type AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE event_type IN ('checkout.success', 'payment.timeout', 'payment.unavailable', 'payment.error', 'db.unavailable', 'unhandled.error') GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -271,6 +271,248 @@
           "markdownContent": ""
         },
         {
+          "id": "Panel_ID9",
+          "type": "line",
+          "title": "Respostas 5XX por serviço (traces)",
+          "description": "Spans servidor com status HTTP 5XX. payment_errors: 503 no payment-service e 502 no shop-api.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, concat(service_name, ' ', http_status_code) AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE span_kind = '2' AND http_status_code LIKE '5%' GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "traces",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Respostas",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 54,
+            "w": 96,
+            "h": 18,
+            "i": 9
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID10",
+          "type": "line",
+          "title": "Chamadas ao payment-service por checkout",
+          "description": "Normal fica perto de 1. retry_storm: sobe para várias tentativas por checkout.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 2,
+            "unit": null
+          },
+          "queryType": "promql",
+          "queries": [
+            {
+              "query": "sum(rate(payment_client_duration_count{service_name=\"shop-api\"}[1m])) / sum(rate(shop_checkout_requests{service_name=\"shop-api\"}[1m]))",
+              "vrlFunctionQuery": "",
+              "customQuery": false,
+              "fields": {
+                "stream": "payment_client_duration_count",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "tentativas por checkout",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 54,
+            "w": 96,
+            "h": 18,
+            "i": 10
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID11",
+          "type": "line",
+          "title": "Memória do shop-api (MB, RSS)",
+          "description": "memory_leak: cresce de forma linear enquanto o cenário está ligado.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "promql",
+          "queries": [
+            {
+              "query": "process_memory_usage{service_name=\"shop-api\"} / 1048576",
+              "vrlFunctionQuery": "",
+              "customQuery": false,
+              "fields": {
+                "stream": "process_memory_usage",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "{service_name}",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 72,
+            "w": 96,
+            "h": 18,
+            "i": 11
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
+          "id": "Panel_ID12",
+          "type": "line",
+          "title": "Volume de logs do shop-api por event_type",
+          "description": "chatty_logging: debug.payload domina o volume (~50 linhas por requisição).",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "unit": null
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x_axis_1, event_type AS breakdown_1, count(*) AS y_axis_1 FROM \"default\" WHERE service_name = 'shop-api' GROUP BY x_axis_1, breakdown_1 ORDER BY x_axis_1",
+              "vrlFunctionQuery": "",
+              "customQuery": true,
+              "fields": {
+                "stream": "default",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "Tempo",
+                    "alias": "x_axis_1",
+                    "column": "x_axis_1",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "Linhas de log",
+                    "alias": "y_axis_1",
+                    "column": "y_axis_1",
+                    "color": "#5960b2"
+                  }
+                ],
+                "z": [],
+                "breakdown": [
+                  {
+                    "label": "Série",
+                    "alias": "breakdown_1",
+                    "column": "breakdown_1",
+                    "color": null
+                  }
+                ],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 72,
+            "w": 96,
+            "h": 18,
+            "i": 12
+          },
+          "htmlContent": "",
+          "markdownContent": ""
+        },
+        {
           "id": "Panel_ID5",
           "type": "table",
           "title": "Spans com erro",
@@ -337,7 +579,7 @@
           ],
           "layout": {
             "x": 0,
-            "y": 54,
+            "y": 90,
             "w": 96,
             "h": 18,
             "i": 5
@@ -348,7 +590,7 @@
         {
           "id": "Panel_ID6",
           "type": "table",
-          "title": "Mudanças (deploys)",
+          "title": "Mudanças (deploys e feature flags)",
           "description": "Eventos change.event: compare o horário com o início dos erros.",
           "config": {
             "show_legends": true,
@@ -359,7 +601,7 @@
           "queryType": "sql",
           "queries": [
             {
-              "query": "SELECT _timestamp, change_service, change_version, body FROM \"default\" WHERE event_type = 'change.event' ORDER BY _timestamp DESC",
+              "query": "SELECT _timestamp, change_service, change_type, change_version, body FROM \"default\" WHERE event_type = 'change.event' ORDER BY _timestamp DESC",
               "vrlFunctionQuery": "",
               "customQuery": true,
               "fields": {
@@ -376,6 +618,12 @@
                     "label": "Serviço",
                     "alias": "change_service",
                     "column": "change_service",
+                    "color": null
+                  },
+                  {
+                    "label": "Tipo",
+                    "alias": "change_type",
+                    "column": "change_type",
                     "color": null
                   },
                   {
@@ -412,7 +660,7 @@
           ],
           "layout": {
             "x": 96,
-            "y": 54,
+            "y": 90,
             "w": 96,
             "h": 18,
             "i": 6
@@ -493,7 +741,7 @@
           ],
           "layout": {
             "x": 0,
-            "y": 72,
+            "y": 108,
             "w": 192,
             "h": 16,
             "i": 7
@@ -580,7 +828,7 @@
           ],
           "layout": {
             "x": 0,
-            "y": 88,
+            "y": 124,
             "w": 192,
             "h": 20,
             "i": 8

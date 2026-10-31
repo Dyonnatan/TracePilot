@@ -11,13 +11,6 @@ ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 START, END = "<!-- scenarios:start -->", "<!-- scenarios:end -->"
 
-ACTIVATION = {
-    "toxiproxy": "Painel chaos-control",
-    "pg_lock": "Painel chaos-control",
-    "cpu_burn": "Painel chaos-control",
-}
-
-
 def cell(text: str) -> str:
     return " ".join(str(text).split()).replace("|", "\\|")
 
@@ -30,7 +23,10 @@ def render() -> str:
     for path in sorted((ROOT / "scenarios").glob("*.yaml")):
         scenario = yaml.safe_load(path.read_text(encoding="utf-8"))
         activation = scenario["activation"]
-        how = ACTIVATION.get(activation["driver"]) or f"`{activation['params']['enable_command']}`"
+        if activation["driver"] == "deploy":
+            how = f"`{activation['params']['enable_command']}`"
+        else:
+            how = "Painel chaos-control"
         ttl = f"{scenario['ttl_seconds']} s" if scenario.get("ttl_seconds") else "manual"
         name = f"`{scenario['name']}`" + (" (protagonista)" if scenario.get("pitch_role") == "protagonist" else "")
         rows.append(
