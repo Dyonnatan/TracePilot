@@ -65,8 +65,11 @@ TracePilot/
 └── otel-collector-config.yaml
 ```
 
-> Estágio atual: **scaffold**. Estrutura e interfaces definidas, lógica de
-> investigação ainda não implementada (ver TODOs em `docs/code-architecture.md`).
+> Estágio atual: **MVP funcional**. O fluxo completo (logs → métricas →
+> traces → diagnóstico → verificação → relatório) roda de ponta a ponta
+> contra uma instância real do OpenObserve, usando a **OpenRouter** como
+> backend de LLM. Detalhe do que está implementado vs. pendente em
+> `docs/code-architecture.md`.
 
 ## Como rodar localmente
 
@@ -82,15 +85,28 @@ pip install -r requirements.txt
 # 3. Rodar a aplicação de teste instrumentada
 cd demo_app && pip install -r requirements.txt
 uvicorn main:app --reload
+
+# 4. Configurar a chave da OpenRouter
+cp .env.example .env   # preencher OPENROUTER_API_KEY
+
+# 5. Gerar uma falha e investigar
+curl -X POST localhost:8000/checkout -H "Content-Type: application/json" \
+  -d '{"order_id":"1","quantity":0,"budget":700}'
+python3 agents/orchestrator.py "checkout falhando com erro 500" \
+  --service tracepilot-demo-app
 ```
 
-Configurações (chaves de API, backend de LLM, endpoints) ficam em `.env` —
-copie `.env.example` para `.env` e preencha.
+Backend de LLM via **OpenRouter** (catálogo único para modelos baratos e
+avançados — ver [openrouter.ai/models](https://openrouter.ai/models)):
+comece com um modelo pequeno/barato (`OPENROUTER_MODEL` no `.env`, padrão
+`openai/gpt-4o-mini`) para validar o pipeline sem custo alto, e troque só
+essa variável quando quiser subir para um modelo mais avançado — não
+precisa mexer em código.
 
 ## Roadmap
 
-1. Implementar a lógica de cada agente (coleta + raciocínio) sobre o
-   `orchestrator.py`.
+1. Roteamento dinâmico no orquestrador (padrão Planejador-Executor — hoje
+   o fluxo é linear fixo, ver `docs/code-architecture.md`).
 2. Construir o [ambiente de referência monitorado](docs/reference-environment.md)
    (Docker, multi-serviço, com cenários de falha controlados) para dar
    material realista às investigações.

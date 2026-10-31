@@ -4,53 +4,95 @@
 > decisão de design ele carrega, e o que falta implementar. Serve de guia
 > para continuar o código e de base técnica para o pitch. Visão geral em
 > [architecture.md](architecture.md).
+>
+> **Status**: MVP funcional — o fluxo linear completo (logs → métricas →
+> traces → diagnóstico → verificação → relatório) roda de ponta a ponta
+> contra uma instância real do OpenObserve, usando a OpenRouter como backend
+> de LLM (modelo pequeno/barato por padrão, trocável via `.env`).
 
 ## `agents/llm/` — interface comum de LLM
 
 | Arquivo | O que é | Decisão de design | Falta implementar |
 |---|---|---|---|
 | `base.py` | Classe abstrata `LLMProvider` com `generate(prompt, **kwargs)`. | O resto do código (orquestrador, agentes) depende só dessa interface, nunca de uma API específica — permite trocar cloud↔local por `.env`, sem tocar nos agentes. | — (interface fechada, só evolui se surgir necessidade nova, ex. streaming) |
-| `cloud_provider.py` | Stub de `LLMProvider` via Anthropic (configurável). | Lê `CLOUD_MODEL`/`ANTHROPIC_API_KEY` do `.env`. | Chamada real à API, retries, logging de prompt/saída para rastreabilidade (LLMOps). |
-| `local_provider.py` | Stub de `LLMProvider` via Ollama. | Lê `OLLAMA_HOST`/`OLLAMA_MODEL` do `.env`. | Chamada real ao Ollama, fallback para `CloudProvider` se o modelo local não responder. |
+| `cloud_provider.py` | `LLMProvider` via **OpenRouter** (API compatível com a da OpenAI). | OpenRouter dá acesso a um catálogo amplo de modelos (do mais barato ao mais avançado) com uma única chave — trocar de modelo é só mudar `OPENROUTER_MODEL` no `.env`, sem tocar em código. Cliente HTTP inicializado de forma preguiçosa (só na primeira chamada), para que montar o grafo não exija chave configurada. | Retries/backoff, logging estruturado de prompt/saída por chamada (rastreabilidade LLMOps — hoje não há log nenhum das chamadas). |
+| `local_provider.py` | Stub de `LLMProvider` via Ollama. | Lê `OLLAMA_HOST`/`OLLAMA_MODEL` do `.env`. | Chamada real ao Ollama, fallback para `CloudProvider` se o modelo local não responder — não é prioridade enquanto o MVP valida via OpenRouter. |
 | `__init__.py` | `get_provider()` resolve qual provider usar a partir de `LLM_BACKEND`. | Ponto único de resolução — nenhum outro módulo deve ler `LLM_BACKEND` diretamente. | — |
 
 ## `agents/tools/openobserve_client.py` — acesso a telemetria
 
-Wrapper sobre a API HTTP do OpenObserve. Decisão de design: expõe **só
-métodos de consulta** (`query_logs`, `query_traces`, `query_metrics`) — os
-agentes nunca devem ter acesso de escrita/admin ao OpenObserve, por
-segurança (limitar o "raio de ação" dos agentes a operações seguras, um dos
-gaps citados na proposta). Falta implementar: as consultas reais via API
-SQL/stream do OpenObserve.
+Wrapper sobre a API HTTP do OpenObserve, com `query_logs`/`query_traces`
+**implementados e validados contra uma instância local real** (schema de
+campo confirmado gerando tráfego de sucesso/falha no `demo_app` e
+inspecionando o retorno). `query_metrics` segue a mesma mecânica mas
+**ainda não foi validado contra dado real**, porque o `demo_app` hoje só
+exporta logs/traces (métricas ficam para quando houver uma fonte real —
+ver [reference-environment.md](reference-environment.md)).
+
+Decisão de design: só métodos de leitura/consulta são expostos — os
+agentes nunca têm acesso de escrita/admin ao OpenObserve. Autenticação
+aceita token (produção) ou usuário/senha (dev local, bate com as
+credenciais do `docker-compose.yml`).
+
+## `agents/evidence_format.py` — formatação de evidência para prompt
+
+Módulo novo (não previsto no scaffold original): compartilha entre os três
+especialistas a lógica de truncar/formatar registros brutos do OpenObserve
+em texto compacto para prompt. Decisão de design: existe separado dos
+agentes porque formatar evidência é puramente mecânico (sem chamada de
+LLM) e idêntico nos três — evita repetir a mesma lógica de truncamento em
+cada `*_agent.py`.
 
 ## `agents/specialists/` — agentes especialistas
 
 `logs_agent.py`, `metrics_agent.py`, `traces_agent.py` seguem a mesma
-assinatura: `run(state, llm, client) -> state`. Decisão de design: cada
-especialista só enxerga sua fonte de dados (logs ou métricas ou traces) e
-devolve evidências ao estado compartilhado — a correlação entre fontes
-acontece no `diagnosis_agent`, não em cada especialista individualmente,
-para manter o raciocínio de correlação em um único lugar auditável. Falta
-implementar: a lógica de consulta + resumo de cada um (hoje só
-`NotImplementedError`).
+assinatura: `run(state, llm, client) -> state`. Cada um: consulta sua
+fonte via `OpenObserveClient`, formata a evidência bruta com
+`evidence_format`, e pede ao LLM um resumo **restrito ao que veio na
+consulta** (prompt explicitamente proíbe inventar informação). Devolvem a
+evidência bruta (`evidence_logs`/`evidence_metrics`/`evidence_traces`) e o
+resumo (`*_summary`) ao estado — a correlação entre fontes acontece no
+`diagnosis_agent`, não em cada especialista, para manter o raciocínio de
+correlação em um único lugar auditável.
+
+`metrics_agent.py` tem uma particularidade: como `query_metrics` ainda não
+foi validado (ver acima), qualquer exceção na consulta é tratada como
+"sem evidência de métricas" em vez de derrubar a investigação inteira.
 
 ## `agents/diagnosis_agent.py` e `agents/verifier_agent.py`
 
-- `diagnosis_agent.run(state, llm) -> state`: consolida evidências dos
-  especialistas em hipóteses com nível de confiança.
-- `verifier_agent.run(state, llm) -> state`: confronta as hipóteses com as
-  evidências e pode rejeitar um diagnóstico sem suporte suficiente.
+- `diagnosis_agent.run(state, llm) -> state`: consolida os três resumos em
+  1-3 hipóteses de causa-raiz, cada uma com confiança (alta/média/baixa) e
+  a evidência que a sustenta — ou declara explicitamente que a evidência é
+  insuficiente, em vez de forçar uma hipótese.
+- `verifier_agent.run(state, llm) -> state`: confronta as hipóteses com os
+  resumos de evidência e devolve um veredito binário (`verified: bool`)
+  mais notas explicando a decisão. O parsing do veredito é por prefixo de
+  string (`"VEREDITO: SUPORTADO"`) em vez de JSON — escolha deliberada para
+  ser robusto com modelos pequenos/baratos, que nem sempre respeitam
+  formato JSON estrito.
 
 Decisão de design: são dois agentes separados (não um só) para que o
 verificador tenha um papel adversarial explícito — reduzir alucinação ao
-forçar uma segunda "opinião" que só aceita conclusões com evidência. Falta
-implementar: os critérios de consolidação e de rejeição.
+forçar uma segunda "opinião" que só aceita conclusões com evidência citada.
+
+## `agents/report.py` — composição do relatório final
+
+Módulo novo: monta o relatório em Markdown a partir do estado final, **sem
+nenhuma chamada de LLM adicional** — todo o conteúdo (hipóteses, resumos,
+veredito) já foi gerado pelos nós anteriores. Decisão de design
+deliberada: manter o custo de uma investigação em no máximo 5 chamadas de
+LLM (logs, métricas, traces, diagnóstico, verificação), já que o MVP usa
+modelos pequenos/baratos via OpenRouter e cada chamada extra tem custo.
 
 ## `agents/orchestrator.py` — o grafo
 
 Define `IncidentState` (TypedDict) e monta um `StateGraph` do LangGraph
 ligando `orchestrator → logs_agent → metrics_agent → traces_agent →
-diagnosis_agent → verifier_agent → END`.
+diagnosis_agent → verifier_agent → report → END`. Também expõe uma CLI
+(`python3 agents/orchestrator.py "relato do erro" [--service ...]
+[--trace-id ...] [--json]`) para rodar uma investigação completa e
+imprimir o relatório (ou o estado completo em JSON, com `--json`).
 
 Decisão de design: LangGraph (em vez de CrewAI) porque o fluxo real não é
 linear — o `orchestrator_node` deve decidir dinamicamente qual especialista
@@ -60,20 +102,23 @@ especialista se rejeitar o diagnóstico. CrewAI dá uma estrutura pronta de
 condicional — ver justificativa completa em
 [architecture.md](architecture.md#3-por-que-agentes-de-ia).
 
-**Estado atual**: o grafo compilado hoje só tem o fluxo linear fixo acima
-(fiação, sem roteamento condicional) — é o próximo passo de implementação,
-junto com a lógica de cada nó.
+**Estado atual**: o grafo compilado roda o fluxo linear fixo acima e já
+produz um relatório real de ponta a ponta. O roteamento dinâmico (próxima
+etapa decidida pelo `orchestrator_node`, e retorno a um especialista se o
+`verifier_agent` rejeitar) continua como próximo passo — não é mais
+bloqueante para ter um MVP demonstrável, mas é o que falta para a
+arquitetura corresponder de fato ao padrão Planejador-Executor descrito em
+[glossario-conceitos-ia.md](glossario-conceitos-ia.md).
 
 ## `demo_app/` — aplicação de teste instrumentada
 
-FastAPI com `FastAPIInstrumentor` (OpenTelemetry) e exportação OTLP para o
-collector. Decisão de design: o endpoint `POST /checkout` tem uma falha
-controlada **determinística** (`ZeroDivisionError` quando `quantity == 0`)
-em vez de uma falha aleatória — para que qualquer investigação (manual ou
-por agente) seja reproduzível e comparável entre execuções, essencial para
-o benchmark. Esse é o caso de teste "canário" que o TracePilot deve
-conseguir diagnosticar de ponta a ponta quando os agentes estiverem
-implementados.
+FastAPI com `FastAPIInstrumentor` (traces) **e exportação de logs via
+OTLP** (adicionado durante a implementação do MVP, para o `logs_agent` ter
+dado real — antes só exportava traces). O endpoint `POST /checkout` tem
+uma falha controlada **determinística** (`ZeroDivisionError` quando
+`quantity == 0`) com log de erro (`exc_info=True`, correlacionado por
+`trace_id`/`span_id`) e exceção registrada no span — essa é a falha
+"canário" que o MVP já consegue investigar de ponta a ponta.
 
 ## `docker-compose.yml` + `otel-collector-config.yaml`
 
@@ -81,26 +126,36 @@ Sobe `openobserve` (armazenamento/consulta de telemetria) e
 `otel-collector` (recebe OTLP do `demo_app` e exporta para o OpenObserve).
 Decisão de design: credenciais do OpenObserve (`ZO_ROOT_USER_EMAIL/PASSWORD`)
 estão com um valor padrão fixo no compose — aceitável para ambiente de
-desenvolvimento local, mas **deve migrar para `.env`** antes de qualquer
-deploy fora da máquina local (gap de segurança a resolver antes de
-produção).
+desenvolvimento local (e é o mesmo usuário/senha usado por
+`OPENOBSERVE_USER`/`OPENOBSERVE_PASSWORD` no `.env.example`), mas **deve
+migrar para `.env`** antes de qualquer deploy fora da máquina local (gap de
+segurança a resolver antes de produção).
 
 ## `benchmark/` e `reports/`
 
 `benchmark/README.md` documenta o plano de avaliação com OpenRCA (ainda sem
-harness implementado). `reports/` é o destino dos relatórios de incidente
-gerados pelo `verifier_agent` ao final do fluxo — hoje só existe a pasta
-(`.gitkeep`), o formato do relatório ainda não foi definido.
+harness implementado — agora que o MVP roda de ponta a ponta, esse é um
+próximo passo natural). `reports/` continua reservado para persistir
+relatórios gerados (hoje o relatório só é impresso via CLI, ainda não é
+salvo em arquivo).
 
-## Ordem sugerida para sair do scaffold
+## Como rodar uma investigação
 
-1. Implementar `cloud_provider.py` (mais rápido para prototipar que o
-   local) e testar `get_provider()`.
-2. Implementar `openobserve_client.py` contra uma instância local do
-   `docker-compose.yml`.
-3. Implementar `logs_agent.py` sozinho, validando contra o erro determinístico
-   do `demo_app` (`ZeroDivisionError` em `/checkout`).
-4. Repetir para `metrics_agent.py` e `traces_agent.py`.
-5. Implementar `diagnosis_agent.py` e `verifier_agent.py`.
-6. Trocar o fluxo linear do `orchestrator.py` por roteamento condicional.
-7. Só então começar o harness de avaliação em `benchmark/`.
+```bash
+docker compose up -d                 # sobe OpenObserve + OTel Collector
+cd demo_app && uvicorn main:app --reload &   # sobe a app de teste
+curl -X POST localhost:8000/checkout -H "Content-Type: application/json" \
+  -d '{"order_id":"1","quantity":0,"budget":700}'   # gera a falha
+
+cp .env.example .env   # preencher OPENROUTER_API_KEY
+python3 agents/orchestrator.py "checkout falhando com erro 500" \
+  --service tracepilot-demo-app
+```
+
+## Próximos passos
+
+1. Roteamento dinâmico no `orchestrator_node` (padrão Planejador-Executor).
+2. Logging estruturado das chamadas de LLM (rastreabilidade/LLMOps).
+3. Validar `query_metrics` contra uma fonte real de métricas.
+4. Persistir o relatório em `reports/` (hoje só vai para stdout).
+5. Harness de avaliação com OpenRCA em `benchmark/`.
