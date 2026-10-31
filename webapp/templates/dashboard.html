@@ -5,16 +5,17 @@
 <div class="dash-head">
   <div>
     <h1>{{ state.system_name }}</h1>
-    <div class="live"><span class="live-dot"></span><span data-updated>ao vivo</span>
+    <div class="live" data-tour="live"><span class="live-dot"></span><span data-updated>ao vivo</span>
       <button type="button" class="link-button" data-refresh-now>atualizar</button></div>
   </div>
+  <button type="button" class="btn-line btn-sm" data-tour-start>Guia</button>
 </div>
 
 <div id="live-root" data-live-url="/dashboard/live" data-interval="10000">
   {% include "_dashboard_live.html" %}
 </div>
 
-<section class="card" id="investigar">
+<section class="card" id="investigar" data-tour="investigate">
   <div class="section-head"><span class="label">Investigar com IA</span></div>
   <form method="post" action="/investigations">
     <div class="investigate">
@@ -29,7 +30,7 @@
 </section>
 
 {% if investigations %}
-<section class="card">
+<section class="card" data-tour="history">
   <div class="section-head"><span class="label">Histórico</span></div>
   <div class="table-scroll">
   <table class="investigations">

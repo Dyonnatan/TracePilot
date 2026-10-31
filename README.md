@@ -94,6 +94,23 @@ TracePilot/
 > painel web pra disparar investigações e fazer drill-down na evidência.
 > Detalhe do que está implementado vs. pendente em `docs/code-architecture.md`.
 
+## Demo completa (um comando)
+
+```bash
+scripts/demo.sh up       # telemetria + loja Apex Space + TracePilot Collector + TracePilot API + painel
+scripts/demo.sh status   # confere cada serviço
+scripts/demo.sh down     # derruba (o OpenObserve continua de pé)
+```
+
+Abra <http://localhost:8800>. O login e a jornada vêm pré-preenchidos
+(`lucas@apexspace.com.br` / `apex2026`, preset em
+`webapp/presets/reference-environment.json`); ao terminar, o painel abre
+com um guia em balões (reabre pelo botão **Guia**). A loja roda da branch
+`feat/reference-environment` num worktree em `.worktrees/`, sem tocar na
+branch atual; falhas para demonstrar em <http://localhost:8090>. Logs e
+PIDs dos processos locais em `workspace/run/`. Para refazer a jornada do
+zero: apague `workspace/profile.json`.
+
 ## Como rodar localmente
 
 ```bash

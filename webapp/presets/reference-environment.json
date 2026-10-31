@@ -2,7 +2,8 @@
   "id": "reference-environment",
   "label": "Loja Apex Space (ambiente de referência)",
   "user": {
-    "email": "demo@apexspace.com.br",
+    "name": "Lucas",
+    "email": "lucas@apexspace.com.br",
     "password": "apex2026"
   },
   "system_name": "Apex Space",

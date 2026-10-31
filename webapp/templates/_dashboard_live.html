@@ -1,6 +1,6 @@
 {% from "_diagram_macros.html" import architecture_diagram, resource_tiles %}
 {% set ov = state.overall %}
-<section class="overview">
+<section class="overview" data-tour="overview">
   <div class="overall st-{{ ov.status }}">
     <span class="overall-mark"></span>
     <h2>{{ ov.headline }}</h2>
@@ -12,17 +12,17 @@
   </div>
 </section>
 
-<section class="card">
+<section class="card" data-tour="map">
   <div class="section-head"><span class="label">Mapa</span></div>
   {{ architecture_diagram(state) }}
 </section>
 
-<section class="section">
+<section class="section" data-tour="resources">
   {{ resource_tiles(state.resources) }}
 </section>
 
 {% if state.alerts %}
-<section class="card">
+<section class="card" data-tour="alerts">
   <div class="section-head"><span class="label">Alertas</span></div>
   <ul class="alert-list">
     {% for a in state.alerts %}

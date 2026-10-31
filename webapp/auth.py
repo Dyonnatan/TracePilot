@@ -15,6 +15,7 @@ import os
 import secrets
 
 from agents import workspace_store
+from webapp import presets
 
 ITERATIONS = 200_000
 SECRET_FILE = workspace_store.WORKSPACE_FILE.parent / "secret.key"
@@ -66,7 +67,13 @@ def authenticate(email: str, password: str) -> dict | None:
             return None
         return user
 
-    name = user.get("name") if email == stored_email and user.get("name") else _name_from_email(email)
+    preset_user = (presets.active() or {}).get("user") or {}
+    if email == stored_email and user.get("name"):
+        name = user["name"]
+    elif email == (preset_user.get("email") or "").lower() and preset_user.get("name"):
+        name = preset_user["name"]
+    else:
+        name = _name_from_email(email)
     new_user = {"name": name, "email": email, "password_hash": hash_password(password)}
     workspace_store.update(user=new_user)
     return new_user

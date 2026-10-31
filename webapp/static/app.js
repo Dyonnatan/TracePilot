@@ -124,7 +124,7 @@
   }
 
   async function refresh() {
-    if (!live || inFlight || document.hidden) return;
+    if (!live || inFlight || document.hidden || document.body.classList.contains('touring')) return;
     inFlight = true;
     try {
       const resp = await fetch(live.dataset.liveUrl, { headers: { 'X-Requested-With': 'fetch' } });
@@ -157,5 +157,117 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     const btn = document.querySelector('[data-refresh-now]');
     if (btn) btn.addEventListener('click', refresh);
+  }
+})();
+
+// ---- Guia do painel (balões) ------------------------------------------
+// Abre sozinho com ?tour=1 (fim do onboarding) ou na primeira visita;
+// o botão "Guia" reabre. Pausa a atualização ao vivo enquanto está aberto,
+// para o elemento destacado não ser trocado no meio do passo.
+(function () {
+  'use strict';
+  const STEPS = [
+    { sel: '[data-tour="overview"]', title: 'Resumo', text: 'Como está o sistema agora: problemas, pontos de atenção e erros recentes.' },
+    { sel: '[data-tour="map"] .diagram-wrap', title: 'Mapa', text: 'Cada caixa é uma parte do seu sistema. Clique em uma para ver os detalhes.' },
+    { sel: '[data-node="tracepilot"]', title: 'Conexão', text: 'Mostra se os dados estão chegando e por onde: TracePilot Collector, TracePilot API ou os dois.' },
+    { sel: '[data-tour="resources"]', title: 'Recursos', text: 'Uso da máquina em tempo real. O ? explica cada indicador.' },
+    { sel: '[data-tour="alerts"]', title: 'Alertas', text: 'O que precisa de atenção e o que fazer. Amarelo avisa antes de virar problema.' },
+    { sel: '[data-tour="investigate"]', title: 'Investigar com IA', text: 'Descreva o problema com suas palavras. A IA encontra a causa e sugere a correção.' },
+    { sel: '[data-tour="history"]', title: 'Histórico', text: 'Investigações anteriores, com o resultado de cada uma.' },
+    { sel: '[data-tour="live"]', title: 'Ao vivo', text: 'O painel se atualiza sozinho a cada 10 segundos.' },
+  ];
+  const SEEN_KEY = 'tp-tour-seen';
+  if (!document.querySelector('[data-tour]')) return;
+
+  let steps = [];
+  let i = 0;
+  let spot, pop;
+
+  function build() {
+    spot = document.createElement('div');
+    spot.className = 'tour-spot';
+    pop = document.createElement('div');
+    pop.className = 'tour-pop';
+    pop.setAttribute('role', 'dialog');
+    pop.innerHTML = '<span class="label tour-count"></span><h3 class="tour-title"></h3><p class="tour-text"></p>'
+      + '<div class="tour-actions"><button type="button" class="link-button" data-tour-skip>Pular</button>'
+      + '<span><button type="button" class="btn-line btn-sm" data-tour-prev>Anterior</button> '
+      + '<button type="button" class="btn-sm" data-tour-next>Próximo</button></span></div>';
+    document.body.append(spot, pop);
+    pop.querySelector('[data-tour-skip]').onclick = end;
+    pop.querySelector('[data-tour-prev]').onclick = () => go(i - 1);
+    pop.querySelector('[data-tour-next]').onclick = () => (i === steps.length - 1 ? end() : go(i + 1));
+  }
+
+  function place() {
+    const el = document.querySelector(steps[i].sel);
+    if (!el) return;
+    // Coordenadas do documento (position: absolute), não da janela: o
+    // balão acompanha a rolagem sem precisar recalcular.
+    const r = el.getBoundingClientRect();
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+    const pad = 6;
+    Object.assign(spot.style, {
+      top: `${r.top + sy - pad}px`, left: `${r.left + sx - pad}px`,
+      width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px`,
+    });
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+    const below = r.bottom + 14 + ph < window.innerHeight;
+    const top = below ? r.bottom + 14 : Math.max(12, r.top - ph - 14);
+    const left = Math.min(Math.max(12, r.left), document.documentElement.clientWidth - pw - 12);
+    Object.assign(pop.style, { top: `${top + sy}px`, left: `${left + sx}px` });
+  }
+
+  function go(n) {
+    i = Math.max(0, Math.min(steps.length - 1, n));
+    const s = steps[i];
+    pop.querySelector('.tour-count').textContent = `${i + 1} de ${steps.length}`;
+    pop.querySelector('.tour-title').textContent = s.title;
+    pop.querySelector('.tour-text').textContent = s.text;
+    pop.querySelector('[data-tour-prev]').disabled = i === 0;
+    pop.querySelector('[data-tour-next]').textContent = i === steps.length - 1 ? 'Concluir' : 'Próximo';
+    const el = document.querySelector(s.sel);
+    const r = el.getBoundingClientRect();
+    if (r.top < 80 || r.bottom > window.innerHeight - 160) {
+      window.scrollTo({ top: window.scrollY + r.top - Math.max(90, (window.innerHeight - r.height) / 3), behavior: 'instant' });
+    }
+    place();
+    pop.querySelector('[data-tour-next]').focus();
+  }
+
+  function start() {
+    steps = STEPS.filter((s) => document.querySelector(s.sel));
+    if (!steps.length) return;
+    if (!spot) build();
+    document.body.classList.add('touring');
+    spot.hidden = false;
+    pop.hidden = false;
+    go(0);
+  }
+
+  function end() {
+    document.body.classList.remove('touring');
+    spot.hidden = true;
+    pop.hidden = true;
+    try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* sem storage: só não lembra */ }
+  }
+
+  window.addEventListener('resize', () => { if (document.body.classList.contains('touring')) place(); });
+  document.addEventListener('keydown', (ev) => {
+    if (!document.body.classList.contains('touring')) return;
+    if (ev.key === 'Escape') end();
+    if (ev.key === 'ArrowRight') go(i + 1);
+    if (ev.key === 'ArrowLeft') go(i - 1);
+  });
+  document.addEventListener('click', (ev) => { if (ev.target.closest('[data-tour-start]')) start(); });
+
+  let seen = false;
+  try { seen = localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { seen = false; }
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tour') === '1' || !seen) {
+    if (params.get('tour')) history.replaceState(null, '', window.location.pathname);
+    setTimeout(start, 400);
   }
 })();

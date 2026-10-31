@@ -1,12 +1,14 @@
 {% extends "onboarding_base.html" %}
-{% block title %}Início · TracePilot{% endblock %}
+{% block title %}Boas-vindas · TracePilot{% endblock %}
 {% block step %}
-<h1>Olá, {{ user.name }}.</h1>
-<p class="lead">Vamos conectar seu sistema. Leva uns 5 minutos.</p>
+<h1>Boas-vindas, {{ user.name }}.</h1>
+<p class="lead">Vou te guiar em alguns passos rápidos para conectar {{ system_name or 'o seu sistema' }} ao TracePilot. Leva uns 5 minutos.</p>
 <ol class="numbered">
-  <li><div><b>Conte sobre o sistema</b><small>Nome, endereço e onde roda.</small></div></li>
-  <li><div><b>Conecte os dados</b><small>TracePilot Collector no servidor ou TracePilot API na aplicação.</small></div></li>
-  <li><div><b>Confira a conexão</b><small>O TracePilot começa a observar.</small></div></li>
+  <li><div><b>Seu sistema</b><small>Nome, endereço e onde roda.</small></div></li>
+  <li><div><b>Instalação</b><small>TracePilot Collector no servidor, TracePilot API na aplicação, ou os dois.</small></div></li>
+  <li><div><b>Repositório</b><small>Opcional, para identificar as tecnologias.</small></div></li>
+  <li><div><b>Conexão e análise</b><small>Conferimos se os dados estão chegando.</small></div></li>
+  <li><div><b>Resumo</b><small>O mapa do seu sistema, pronto para acompanhar.</small></div></li>
 </ol>
 <div class="actions"><a href="/onboarding/about" class="btn btn-lg">Começar</a></div>
 {% endblock %}

@@ -418,3 +418,24 @@ summary { cursor: pointer; font-weight: 600; }
   .scan .v { grid-column: 2; }
   .topbar-user { display: none; }
 }
+
+/* ---- Guia (balões) ---- */
+.tour-spot {
+  position: absolute; z-index: 90; pointer-events: none; border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(5, 6, 8, .72); outline: 1px solid var(--ink-2);
+  transition: all .25s ease;
+}
+.tour-pop {
+  position: absolute; z-index: 91; width: min(340px, calc(100vw - 24px));
+  background: var(--ink); color: var(--bg); border-radius: 8px; padding: 1rem 1.1rem .85rem;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5); transition: top .25s ease, left .25s ease;
+}
+.tour-pop .label { color: #6d6f72; }
+.tour-pop h3 { margin: .35rem 0 .3rem; font-size: 1.05rem; color: var(--bg); }
+.tour-pop p { margin: 0; font-size: .92rem; line-height: 1.45; color: #2b2d31; }
+.tour-actions { display: flex; justify-content: space-between; align-items: center; margin-top: .9rem; }
+.tour-pop .link-button { color: #55585d; }
+.tour-pop .btn-sm { background: var(--bg); color: var(--ink); border-color: var(--bg); }
+.tour-pop .btn-line { background: transparent; color: var(--bg); border-color: #b9b8b3; }
+.tour-pop button:disabled { opacity: .35; cursor: default; }
+.dash-head > .btn-line { align-self: center; }

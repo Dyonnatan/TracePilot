@@ -222,7 +222,13 @@ def onboarding_welcome(request: Request):
         return guard
     workspace_store.set_current_step("welcome")
     return templates.TemplateResponse(
-        request, "onboarding_welcome.html", {"step_index": 0, "user": _current_user(request)}
+        request,
+        "onboarding_welcome.html",
+        {
+            "step_index": 0,
+            "user": _current_user(request),
+            "system_name": presets.form_values(workspace_store.load()).get("system_name"),
+        },
     )
 
 
@@ -380,7 +386,8 @@ def onboarding_complete(request: Request):
     if guard:
         return guard
     workspace_store.mark_onboarding_complete()
-    return RedirectResponse(url="/dashboard", status_code=303)
+    # ?tour=1 abre o guia do painel na primeira visita.
+    return RedirectResponse(url="/dashboard?tour=1", status_code=303)
 
 
 @app.post("/onboarding/reset")
