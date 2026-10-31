@@ -76,6 +76,19 @@ verificação não aceita, o LLM é obrigado a dar um palpite com confiança em
 % citando a cadeia e a temporalidade — a tela mostra "Melhor palpite · N%"
 em vez de "Ainda sem certeza", com a cadeia do erro e a linha do tempo.
 
+**Anomalias sem erro** (`agents/tools/anomaly.py`): compara uma janela
+recente com a hora anterior (mediana, para um incidente antigo não sujar a
+base) e aponta, cada um numa frase com antes e depois: rota mais lenta,
+operação interna mais lenta (span), mais consultas ao banco por requisição
+(N+1) ou mais chamadas a outro serviço (retries), CPU/memória de contêiner
+(métricas `container_*` do `docker_stats`, ligadas pelo override
+`docker-compose.hostmetrics.yml`), volume de logs e saúde do banco (spans
+com `db_system`). Alimenta os alertas e os nós do mapa (o Banco de dados
+deixa de ser sempre "sem dados") e entra na linha do tempo da investigação
+— assim cenários sem nenhum erro (índice inválido, I/O síncrono, N+1, log
+excessivo, vazamento de memória) também chegam a uma causa. A linha de CPU
+da investigação distingue a máquina (folgada) do contêiner no limite.
+
 **Segurança** (duas frentes, regras determinísticas e explicáveis):
 
 - `agents/tools/security_scan.py` — análise de vulnerabilidades, rodada no

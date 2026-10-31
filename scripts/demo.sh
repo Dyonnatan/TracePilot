@@ -73,14 +73,23 @@ status() {
 
 case "${1:-}" in
   up)
-    echo "1/5 Telemetria (OpenObserve + Collector OTel)"
-    if ! docker ps --format '{{.Names}}' | grep -qx tracepilot-openobserve; then
-      docker compose up -d
-    else
-      echo "  já está de pé"
+    echo "1/5 Telemetria (OpenObserve + Collector OTel com métricas de host e contêineres)"
+    TELEMETRY=(docker compose -f docker-compose.yml -f docker-compose.hostmetrics.yml)
+    # Rede `tracepilot` criada fora deste compose (sem o label dele): o
+    # compose recusaria; nesse caso, tratamos a rede como externa.
+    if docker network inspect tracepilot >/dev/null 2>&1 && \
+       [[ -z "$(docker network inspect tracepilot --format '{{index .Labels "com.docker.compose.network"}}')" ]]; then
+      TELEMETRY+=(-f scripts/compose-external-net.yml)
     fi
-    docker network inspect tracepilot >/dev/null 2>&1 || docker network create tracepilot >/dev/null
+    if ! docker ps --format '{{.Names}}' | grep -qx tracepilot-openobserve; then
+      "${TELEMETRY[@]}" up -d openobserve
+    else
+      echo "  OpenObserve já está de pé"
+    fi
+    # Recria o Collector só se a configuração mudou (idempotente).
+    "${TELEMETRY[@]}" up -d --no-deps otel-collector 2>&1 | grep -E "Started|Running|Error" || true
     docker network connect --alias otel-collector tracepilot tracepilot-otel-collector 2>/dev/null || true
+    docker network connect --alias openobserve tracepilot tracepilot-openobserve 2>/dev/null || true
 
     echo "2/5 Loja Apex Space (ambiente de referência)"
     # A loja entra na rede `tracepilot` e exporta para o collector com o

@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 
 from agents.llm import LLMProvider
+from agents.tools import anomaly
 from agents.tools.openobserve_client import OpenObserveClient, _escape
 
 WINDOW_HOURS = 24
@@ -242,6 +243,22 @@ def build_timeline(client: OpenObserveClient, services: list[str], end_us: int |
         events.append({"t": g["first"], "kind": "log",
                        "text": f"{g['service']} registrou {g['count']}× \"{g['message'][:90]}\""})
 
+    # 7. Anomalias sem erro na janela do incidente (lentidão, contêineres,
+    # padrões de chamada, volume de logs): cobre o que a contagem de erros
+    # não vê. Janela recente = 15 min (ou desde o primeiro erro, se for
+    # mais recente); base = 60 min antes.
+    recent_min = 15
+    if facts.get("first_error"):
+        recent_min = max(5, min(15, int((end_us / 1e6 - facts["first_error"]) / 60) + 2))
+    signals = anomaly.detect(client, services, recent_min=recent_min, base_min=60, end_us=end_us)["signals"]
+    facts["anomalies"] = signals
+    kind_map = {"route_latency": "latency", "op_latency": "latency", "sql_latency": "latency", "container_cpu": "resource",
+                "container_memory": "resource", "n_plus_one": "pattern", "repeated_calls": "pattern",
+                "log_volume": "log", "db_errors": "error"}
+    t_anom = end_us / 1e6 - recent_min * 60
+    for sig in signals:
+        events.append({"t": t_anom, "kind": kind_map.get(sig["kind"], "latency"), "text": f"{sig['title']} — {sig['detail']}"})
+
     events.sort(key=lambda e: e["t"])
     for e in events:
         e["when"] = _fmt_ts(e["t"])
@@ -272,10 +289,22 @@ def digest(timeline: dict) -> str:
         slower = l["after_ms"] > l["before_ms"] * 2 and l["after_ms"] - l["before_ms"] > 200
         lines.append(f"Latência de {l['route']}: {l['before_ms']} ms antes x {l['after_ms']} ms depois do primeiro erro"
                      + (" — FICOU MAIS LENTA." if slower else " — sem mudança relevante (não é lentidão)."))
+    container_cpu = [a for a in f.get("anomalies", []) if a["kind"] == "container_cpu"]
     if f.get("cpu_peak_near_first_error") is not None:
         cpu = f["cpu_peak_near_first_error"]
-        lines.append(f"Pico de CPU do servidor perto do primeiro erro: {cpu}%"
-                     + (" — ALTO." if cpu >= 85 else " — normal (não é falta de CPU)."))
+        if cpu >= 85:
+            lines.append(f"CPU da MÁQUINA perto do primeiro erro: {cpu}% — ALTO.")
+        elif container_cpu:
+            lines.append(f"CPU da MÁQUINA perto do primeiro erro: {cpu}% — a máquina está folgada, "
+                         "mas um CONTÊINER está no limite (ver abaixo).")
+        else:
+            lines.append(f"CPU da MÁQUINA perto do primeiro erro: {cpu}% — normal.")
+    anomalies = f.get("anomalies", [])
+    if anomalies:
+        lines.append("ANOMALIAS (janela do incidente x hora anterior):")
+        lines += [f"- {a['title']} ({a['detail']})" for a in anomalies]
+    elif not f.get("error_count"):
+        lines.append("Nenhuma anomalia de tempo, recursos, chamadas ou logs em relação à hora anterior.")
     for service, vs in f.get("versions", {}).items():
         if len(vs) > 1:
             lines.append(f"Versões de {service} na janela: " + ", ".join(f"{v} (desde {_fmt_ts(t)})" for v, t in vs))

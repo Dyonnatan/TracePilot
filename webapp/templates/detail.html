@@ -72,7 +72,7 @@
     <span class="decision-actions-label" style="margin-top:1.2rem">Linha do tempo · últimas {{ (investigation.timeline_facts or {}).window_hours or 24 }} h</span>
     <ol class="timeline">
       {% for e in investigation.timeline %}
-      <li class="tl-{{ e.kind }}"><span class="tl-when">{{ e.when }}</span><span class="tl-kind">{{ {'error':'erro','origin':'origem','deploy':'deploy','latency':'lentidão','resource':'recurso','log':'log'}.get(e.kind, e.kind) }}</span><span class="tl-text">{{ e.text }}</span></li>
+      <li class="tl-{{ e.kind }}"><span class="tl-when">{{ e.when }}</span><span class="tl-kind">{{ {'error':'erro','origin':'origem','deploy':'deploy','latency':'lentidão','resource':'recurso','log':'log','pattern':'padrão'}.get(e.kind, e.kind) }}</span><span class="tl-text">{{ e.text }}</span></li>
       {% endfor %}
     </ol>
     {% endif %}

@@ -236,6 +236,7 @@ def build_state(
     api_service: dict | None = None,
     threats: dict | None = None,
     security: dict | None = None,
+    anomalies: dict | None = None,
 ) -> dict:
     """Monta tudo o que o diagrama, os indicadores e os alertas precisam.
     Nunca levanta exceção por dado faltando."""
@@ -317,6 +318,39 @@ def build_state(
             "action": f"Instale o {COLLECTOR_NAME} ou envie dados pela {API_NAME}.",
         })
 
+    # ---- Anomalias sem erro (lentidão, recursos, padrões, logs) ----------
+    db_info = (anomalies or {}).get("db")
+    db_status = "unknown"
+    db_facts = []
+    if db_info:
+        db_status = "ok"
+        db_facts = [
+            ("Consultas (5 min)", str(db_info["queries"])),
+            ("Tempo típico", f"{db_info['median_ms']} ms"),
+            ("Consultas com erro", str(db_info["errors"])),
+        ]
+    for sig in (anomalies or {}).get("signals", []):
+        alerts.append({
+            "level": sig["level"], "node": sig["node"], "title": sig["title"], "detail": sig["detail"],
+            "action": {
+                "route_latency": "Peça para a IA investigar a lentidão.",
+                "op_latency": "Peça para a IA investigar a lentidão.",
+                "sql_latency": "Confira os índices da tabela dessa consulta (EXPLAIN mostra se lê a tabela inteira).",
+                "n_plus_one": "Busque os itens numa consulta só (join/IN) em vez de uma por item.",
+                "repeated_calls": "Limite as tentativas (retry com espera crescente e teto).",
+                "container_cpu": "Veja o que consome CPU nesse serviço ou aumente o limite do contêiner.",
+                "container_memory": "Reinicie o serviço e procure cache ou lista que só cresce.",
+                "log_volume": "Desligue logs de debug em produção.",
+                "db_errors": "Veja se há bloqueio (lock) ou consulta travada no banco.",
+            }.get(sig["kind"], "Peça para a IA investigar."),
+            "investigate": sig["kind"] in ("route_latency", "op_latency", "sql_latency", "n_plus_one", "repeated_calls", "db_errors"),
+        })
+        if sig["node"] == "webapp" and web_status == "ok":
+            web_status = "warn"
+        if sig["node"] == "database":
+            db_status = _worst([db_status if db_status != "unknown" else "ok", sig["level"]])
+    infra_signal = [x["level"] for x in (anomalies or {}).get("signals", []) if x["node"] == "infra"]
+
     # ---- Tráfego suspeito (quem acessa) ---------------------------------
     users_status = web_status
     users_facts = []
@@ -373,13 +407,13 @@ def build_state(
         },
         "database": {
             "title": "Banco de dados", "subtitle": "pedidos, cadastros",
-            "status": "unknown",
-            "what": "Ainda não monitorado diretamente. Falhas aparecem como erros do site.",
-            "facts": [],
+            "status": db_status,
+            "what": "Onde ficam pedidos e cadastros. Medido pelas consultas que o sistema faz.",
+            "facts": db_facts or [("Situação", "nenhuma consulta rastreada ainda")],
         },
         "infra": {
             "title": "Servidor", "subtitle": host,
-            "status": infra_status,
+            "status": _worst([infra_status] + infra_signal) if infra_signal else infra_status,
             "what": "A máquina onde tudo roda.",
             "facts": infra_facts,
         },
@@ -427,6 +461,7 @@ def build_state(
         "agent_reporting": agent_reporting,
         "connection": conn,
         "threats": threats,
+        "anomalies": anomalies,
         "security": security,
         "recent_errors": recent_errors,
         "tech": tech,

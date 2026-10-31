@@ -559,7 +559,7 @@ dl.kv.kv-2col dd { text-align: left; }
 .timeline li { display: grid; grid-template-columns: 8.5rem 5.5rem 1fr; gap: .8rem; padding: .45rem 0 .45rem 1rem; position: relative; font-size: .9rem; }
 .timeline li::before { content: ""; position: absolute; left: -4px; top: .85rem; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
 .timeline .tl-origin::before, .timeline .tl-error::before { background: var(--down); }
-.timeline .tl-deploy::before, .timeline .tl-latency::before, .timeline .tl-resource::before { background: var(--warn); }
+.timeline .tl-deploy::before, .timeline .tl-latency::before, .timeline .tl-resource::before, .timeline .tl-pattern::before { background: var(--warn); }
 .tl-when { font: .78rem var(--mono); color: var(--ink-3); }
 .tl-kind { font: 500 .7rem var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
 .tl-origin .tl-kind, .tl-error .tl-kind { color: var(--down); }

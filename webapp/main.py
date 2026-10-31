@@ -32,6 +32,7 @@ from agents.tools import resource_snapshot as resource_snapshot_tool
 from agents.tools import github_inspector
 from agents.tools import security_scan
 from agents.tools import traffic_guard
+from agents.tools import anomaly
 from webapp import auth, monitoring, presets
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -201,8 +202,16 @@ def _collect_state(snapshot: dict | None = None) -> dict:
         sources=_telemetry_sources() if openobserve["up"] else None,
         api_service=_ingest_api_status(),
         threats=_traffic_threats() if openobserve["up"] else None,
+        anomalies=_anomalies() if openobserve["up"] else None,
         security=workspace_store.load().get("security_scan"),
     )
+
+
+def _anomalies() -> dict | None:
+    try:
+        return anomaly.detect_cached(OpenObserveClient(), _monitored_services())
+    except Exception:
+        return None
 
 
 def _traffic_threats() -> dict | None:

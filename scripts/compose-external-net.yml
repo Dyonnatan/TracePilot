@@ -1,0 +1,6 @@
+# Usado pelo scripts/demo.sh quando a rede `tracepilot` já existe sem ter
+# sido criada por este compose (ex.: criada à mão): trata a rede como externa.
+networks:
+  default:
+    name: tracepilot
+    external: true
