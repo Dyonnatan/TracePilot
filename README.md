@@ -59,12 +59,20 @@ TracePilot/
 ├── agents/            # orquestrador LangGraph + agentes especialistas + providers de LLM
 ├── webapp/              # painel web (FastAPI) para monitorar e investigar
 ├── demo_app/           # app FastAPI instrumentada, com falhas controladas
+├── local-agent/         # agente leve em Rust (recursos do SO), instalado na máquina monitorada
 ├── benchmark/          # notas de avaliação (OpenRCA)
 ├── reports/             # investigações persistidas (JSON)
 ├── docs/                 # arquitetura geral, de código e glossário de conceitos
 ├── docker-compose.yml    # OpenObserve + OTel Collector
 └── otel-collector-config.yaml
 ```
+
+> O TracePilot é composto por dois sistemas: o **agente local**
+> ([`local-agent/`](local-agent/), Rust, baixo impacto — recursos do
+> sistema; FIM/auditoria de usuário ficam a cargo do Wazuh, ver
+> [docs/local-agent-architecture.md](docs/local-agent-architecture.md))
+> instalado na máquina monitorada, e o **servidor TracePilot** (este
+> repositório — processamento pesado dos agentes de IA).
 
 > Estágio atual: **MVP funcional com interface web**. O fluxo completo
 > (logs → métricas → traces → diagnóstico → verificação → relatório) roda
@@ -125,6 +133,10 @@ a **OpenRouter** (`LLM_BACKEND=cloud`) se preferir backend em nuvem — ver
    relatório gerado.
 5. Memória vetorial de incidentes passados (ver gaps em
    `docs/architecture.md`).
+6. Agente local: empacotar `local-agent/` como instalador (MSI/pkg/deb) e
+   decidir, com atenção à privacidade, se/quando integrar o Wazuh para
+   FIM e auditoria de usuário — ver
+   [docs/local-agent-architecture.md](docs/local-agent-architecture.md).
 
 ## Licença
 
