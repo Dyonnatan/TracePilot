@@ -59,6 +59,29 @@ mesmos três nomes.
 `value`. `query_metrics` deriva o stream do nome; antes consultava
 `default` e por isso o painel nunca reconhecia o agente.
 
+**Segurança** (duas frentes, regras determinísticas e explicáveis):
+
+- `agents/tools/security_scan.py` — análise de vulnerabilidades, rodada no
+  passo "Análise" do onboarding e pelo botão "Analisar de novo" do painel
+  (`POST /security/scan`; resultado salvo em `profile.security_scan`).
+  Código (cópia local: segredos, SQL montado com texto — f-string que só
+  interpola CONSTANTES não conta —, eval/shell, CORS aberto, debug, root no
+  container, senha padrão, dependências sem versão), site (HTTPS,
+  cabeçalhos, versão do servidor, `/.env` e `/.git` acessíveis, `/docs`
+  público) e servidor (bancos de dados ouvindo em 0.0.0.0). Ranqueado
+  crítico > alto > médio > baixo, cada achado com "por que importa", "como
+  corrigir" e um prompt pronto para a IA corrigir.
+- `agents/tools/traffic_guard.py` — tráfego suspeito ao vivo, a partir dos
+  spans de servidor do serviço de entrada (`recent_http_requests`; a URL
+  completa está em `http_url`, `http_target` vem sem query): tentativa de
+  invasão (assinaturas de ataque ou ferramenta como sqlmap/Nuclei),
+  varredura (muitos 404 por IP), força bruta (401/403 por IP), robôs e
+  buscadores. Só o serviço de entrada é analisado: chamadas internas entre
+  serviços viravam falso "robô". O gerador de carga da demo é ignorado
+  (`TRAFFIC_ALLOWED_AGENTS`). Alimenta o nó "Usuários" do mapa, os alertas
+  e o cartão "Tráfego suspeito". `scripts/simulate-attack.sh` gera tráfego
+  hostil contra a loja local (recusa alvos fora de localhost).
+
 **Preset de demonstração** (`webapp/presets.py` + `webapp/presets/*.json`,
 escolhido por `TRACEPILOT_PRESET`, padrão `reference-environment`):
 pré-preenche login e questionário com os dados do ambiente de referência

@@ -64,6 +64,16 @@
       open ? ui.openHelp.add(key) : ui.openHelp.delete(key);
       return;
     }
+    const copyText = ev.target.closest('[data-copy-text]');
+    if (copyText) {
+      const pre = copyText.parentElement.querySelector('pre');
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        const original = copyText.textContent;
+        copyText.textContent = 'Copiado';
+        setTimeout(() => { copyText.textContent = original; }, 1500);
+      });
+      return;
+    }
     const prefill = ev.target.closest('[data-prefill]');
     if (prefill) {
       const box = document.getElementById('error-report');
@@ -172,6 +182,8 @@
     { sel: '[data-node="tracepilot"]', title: 'Conexão', text: 'Mostra se os dados estão chegando e por onde: TracePilot Collector, TracePilot API ou os dois.' },
     { sel: '[data-tour="resources"]', title: 'Recursos', text: 'Uso da máquina em tempo real. O ? explica cada indicador.' },
     { sel: '[data-tour="alerts"]', title: 'Alertas', text: 'O que precisa de atenção e o que fazer. Amarelo avisa antes de virar problema.' },
+    { sel: '[data-tour="threats"]', title: 'Tráfego suspeito', text: 'Robôs, varreduras e tentativas de invasão detectados nos acessos reais, com o IP e o que fazer.' },
+    { sel: '[data-tour="vulns"]', title: 'Vulnerabilidades', text: 'Falhas de segurança do código, do site e do servidor, da mais urgente para a menos. Cada uma tem um prompt pronto para a IA corrigir.' },
     { sel: '[data-tour="investigate"]', title: 'Investigar com IA', text: 'Descreva o problema com suas palavras. A IA encontra a causa e sugere a correção.' },
     { sel: '[data-tour="history"]', title: 'Histórico', text: 'Investigações anteriores, com o resultado de cada uma.' },
     { sel: '[data-tour="live"]', title: 'Ao vivo', text: 'O painel se atualiza sozinho a cada 10 segundos.' },

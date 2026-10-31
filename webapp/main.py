@@ -25,6 +25,8 @@ from agents.orchestrator import run_investigation
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.tools import resource_snapshot as resource_snapshot_tool
 from agents.tools import github_inspector
+from agents.tools import security_scan
+from agents.tools import traffic_guard
 from webapp import auth, monitoring, presets
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -192,7 +194,32 @@ def _collect_state(snapshot: dict | None = None) -> dict:
         recent_errors=_recent_error_count() if openobserve["up"] else None,
         sources=_telemetry_sources() if openobserve["up"] else None,
         api_service=_ingest_api_status(),
+        threats=_traffic_threats() if openobserve["up"] else None,
+        security=workspace_store.load().get("security_scan"),
     )
+
+
+def _traffic_threats() -> dict | None:
+    """Só o serviço de entrada (o que recebe tráfego de fora): os demais
+    são chamados por ele, e o user-agent interno viraria falso "robô"."""
+    try:
+        requests = OpenObserveClient().recent_http_requests(
+            _monitored_services()[:1],
+            minutes=monitoring.RECENT_ERRORS_WINDOW_MIN,
+            exclude_agents=traffic_guard.ALLOWED_AGENTS,
+        )
+        return traffic_guard.analyze(requests)
+    except Exception:
+        return None
+
+
+def _run_security_scan() -> dict:
+    profile = workspace_store.load()
+    result = security_scan.scan(app_url=_app_url(), repo_path=profile.get("repo_local_path"))
+    for f in result["findings"]:
+        f["prompt"] = security_scan.fix_prompt(f, profile.get("system_name"))
+    workspace_store.update(security_scan=result)
+    return result
 
 
 def _telemetry_sources() -> dict | None:
@@ -342,6 +369,7 @@ def onboarding_configuring(request: Request):
     workspace_store.set_current_step("configuring")
     snapshot = resource_snapshot_tool.get_resource_snapshot()
     workspace_store.update(host_snapshot=snapshot)
+    _run_security_scan()
     profile = workspace_store.load()
     return templates.TemplateResponse(
         request,
@@ -489,6 +517,15 @@ def dashboard_live(request: Request):
     if _current_user(request) is None:
         return HTMLResponse("", status_code=401)
     return templates.TemplateResponse(request, "_dashboard_live.html", _dashboard_context(request))
+
+
+@app.post("/security/scan")
+def security_rescan(request: Request):
+    guard = _require_login(request)
+    if guard:
+        return guard
+    _run_security_scan()
+    return RedirectResponse(url="/dashboard#vulnerabilidades", status_code=303)
 
 
 @app.get("/api/dashboard")

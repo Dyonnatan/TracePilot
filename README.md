@@ -102,6 +102,10 @@ scripts/demo.sh status   # confere cada serviço
 scripts/demo.sh down     # derruba (o OpenObserve continua de pé)
 ```
 
+Para mostrar a detecção de ataques: `scripts/simulate-attack.sh`
+(robô de varredura, SQL injection, XSS, path traversal e crawler contra a
+loja local) e veja o painel em até 10 s.
+
 Abra <http://localhost:8800>. O login e a jornada vêm pré-preenchidos
 (`lucas@apexspace.com.br` / `apex2026`, preset em
 `webapp/presets/reference-environment.json`); ao terminar, o painel abre

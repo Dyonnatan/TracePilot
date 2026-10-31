@@ -15,6 +15,49 @@
   {% include "_dashboard_live.html" %}
 </div>
 
+{% set sec = profile.security_scan %}
+<section class="card" id="vulnerabilidades" data-tour="vulns">
+  <div class="section-head">
+    <span class="label">Vulnerabilidades · por urgência</span>
+    <form method="post" action="/security/scan"><button type="submit" class="btn-line btn-sm">Analisar de novo</button></form>
+  </div>
+  {% if not sec %}
+  <p class="empty">Ainda não analisado. Clique em "Analisar de novo".</p>
+  {% else %}
+  <div class="stat-row">
+    {% for sev, label in [('critical','crítico'),('high','alto'),('medium','médio'),('low','baixo')] %}
+    <div class="{{ ('sev-' ~ sev) if sec.counts[sev] else 'zero' }}"><strong>{{ sec.counts[sev] }}</strong><span class="label">{{ label }}</span></div>
+    {% endfor %}
+  </div>
+  {% if sec.findings %}
+  <ol class="vuln-list">
+    {% for f in sec.findings %}
+    <li class="vuln sev-{{ f.severity }}">
+      <details>
+        <summary>
+          <span class="vuln-sev">{{ f.severity_label }}</span>
+          <span class="vuln-title">{{ f.title }}</span>
+          <span class="vuln-where mono">{{ f.where }}</span>
+          <span class="vuln-urgency">{{ f.urgency }}</span>
+        </summary>
+        <div class="vuln-body">
+          <p><b>Por que importa:</b> {{ f.why }}</p>
+          <p><b>Como corrigir:</b> {{ f.fix }}</p>
+          {% if f.prompt %}
+          <div class="code"><button type="button" class="copy-btn btn-line btn-sm" data-copy-text>Copiar prompt para IA</button><pre>{{ f.prompt }}</pre></div>
+          {% endif %}
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty">Nenhuma vulnerabilidade encontrada.</p>
+  {% endif %}
+  <p class="scan-meta mono">{% for c in sec.checks %}{{ c.area }} {{ '✓' if c.ok else '✕' }}{{ ' · ' if not loop.last }}{% endfor %} · {{ sec.checked_at | int | timestamp_to_str }}</p>
+  {% endif %}
+</section>
+
 <section class="card" id="investigar" data-tour="investigate">
   <div class="section-head"><span class="label">Investigar com IA</span></div>
   <form method="post" action="/investigations">

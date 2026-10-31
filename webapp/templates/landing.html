@@ -10,7 +10,7 @@
     <h1 style="margin-top:1rem">Seu sistema caiu.<br><span>A gente diz por quê.</span></h1>
   </div>
   <div>
-    <p>O TracePilot vigia o seu site e o servidor, avisa antes de quebrar e, quando quebra, explica a causa em português.</p>
+    <p>O TracePilot vigia o seu site e o servidor, avisa antes de quebrar, aponta falhas de segurança e ataques e, quando algo quebra, explica a causa em português.</p>
     <div class="actions">
       {% if user %}<a href="/dashboard" class="btn btn-lg">Abrir painel</a>
       {% else %}<a href="/login" class="btn btn-lg">Começar</a>{% endif %}
@@ -45,6 +45,22 @@ ZeroDivisionError: division by zero</pre>
 </section>
 
 <section class="band">
+  <span class="label">Segurança</span>
+  <div class="compare">
+    <div>
+      <span class="label">Na análise</span>
+      <h3 class="option-title">Vulnerabilidades por urgência</h3>
+      <p class="muted" style="margin:0">Código, site e servidor verificados: senha no código, banco exposto, cabeçalhos faltando. Do que corrigir agora ao que pode esperar, com o prompt para a IA corrigir.</p>
+    </div>
+    <div>
+      <span class="label">No monitoramento</span>
+      <h3 class="option-title">Tráfego suspeito ao vivo</h3>
+      <p class="muted" style="margin:0">Robôs, varreduras e tentativas de invasão (SQL injection, XSS, arquivos sensíveis) detectados nos acessos reais, com o IP e o que fazer.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
   <span class="label">Duas formas de conectar</span>
   <div class="compare">
     <div>
@@ -64,7 +80,7 @@ ZeroDivisionError: division by zero</pre>
   <span class="label">Como funciona</span>
   <div class="pillars">
     <div><span class="label">01</span><h3>Conecte</h3><p>Responda quatro perguntas e escolha: Collector, API ou os dois.</p></div>
-    <div><span class="label">02</span><h3>Acompanhe</h3><p>Site, servidor e erros num mapa só, ao vivo.</p></div>
+    <div><span class="label">02</span><h3>Acompanhe</h3><p>Site, servidor, erros e ataques num mapa só, ao vivo.</p></div>
     <div><span class="label">03</span><h3>Investigue</h3><p>Descreva o problema. A IA cruza os dados e traz a causa e a correção.</p></div>
   </div>
 </section>

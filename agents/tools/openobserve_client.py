@@ -188,6 +188,34 @@ class OpenObserveClient:
         start_us, end_us = _resolve_window(start_time, end_time)
         return self._search("metrics", sql, start_us, end_us, size)
 
+    def recent_http_requests(
+        self,
+        services: list[str],
+        minutes: int = 15,
+        size: int = 2000,
+        exclude_agents: list[str] | None = None,
+    ) -> list[dict]:
+        """Requisições HTTP recebidas pelos `services` (spans de servidor,
+        `span_kind = '2'`) na janela recente, só com os campos usados na
+        detecção de tráfego suspeito. Validado contra spans reais da
+        instrumentação FastAPI do OpenTelemetry: `http_target` vem SEM a
+        query string; a URL completa (com `?q=...`) está em `http_url`.
+        `exclude_agents` tira tráfego sintético conhecido já na consulta,
+        para ele não ocupar o limite de `size`."""
+        in_list = ", ".join(f"'{_escape(s)}'" for s in services)
+        conditions = [f"service_name IN ({in_list})", "span_kind = '2'"]
+        for agent in exclude_agents or []:
+            conditions.append(
+                f"(http_user_agent IS NULL OR http_user_agent NOT LIKE '%{_escape(agent)}%')"
+            )
+        start_us, end_us = _resolve_window(None, None, default_minutes=minutes)
+        sql = (
+            "SELECT _timestamp, http_method, http_target, http_url, http_status_code, "
+            "http_user_agent, net_peer_ip, service_name "
+            f'FROM "default" WHERE {" AND ".join(conditions)} ORDER BY _timestamp DESC'
+        )
+        return self._search("traces", sql, start_us, end_us, size)
+
     def recent_sources(self, services: list[str], minutes: int = 15) -> dict:
         """De onde está chegando telemetria dos `services` na janela
         recente: quantos logs/spans chegaram e se algum veio pela API de

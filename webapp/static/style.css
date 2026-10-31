@@ -484,3 +484,52 @@ summary { cursor: pointer; font-weight: 600; }
 :root[data-theme="light"] .theme-toggle .i-sun { display: block; }
 :root[data-theme="light"] .theme-toggle .i-moon { display: none; }
 .tour-pop .btn-sm:not(.btn-line):hover { background: var(--surface-2); }
+
+/* ---- Segurança ---- */
+.stat-row { display: flex; gap: 2.2rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.stat-row strong { display: block; font: 500 1.6rem var(--mono); line-height: 1.1; }
+.stat-row .label { font-size: .66rem; }
+.stat-row .zero strong { color: var(--ink-3); }
+.stat-row .c-down strong, .stat-row .sev-critical strong { color: var(--down); }
+.stat-row .c-warn strong, .stat-row .sev-high strong { color: var(--warn); }
+.stat-row .sev-medium strong, .stat-row .sev-low strong { color: var(--ink); }
+.alert-detail { font: .8rem var(--mono) !important; color: var(--ink-3) !important; margin: .1rem 0 .15rem !important; }
+.section-head form { margin: 0; }
+
+.threat-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.threat-list li { display: grid; grid-template-columns: 14px 1fr minmax(180px, 32%); gap: .9rem; align-items: start; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+.threat-list .dot { margin-top: .45rem; }
+.threat-main strong { font-weight: 600; }
+.threat-sample { display: block; margin-top: .3rem; font-size: .76rem; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--down); background: var(--down-soft); }
+.threat-advice { margin: 0; font-size: .86rem; color: var(--ink-2); }
+.threat-list li:not(.lvl-down) .threat-sample { color: var(--ink-2); background: var(--surface-2); }
+
+.vuln-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); counter-reset: v; }
+.vuln { border-bottom: 1px solid var(--line); }
+.vuln details { border: none; padding: 0; }
+.vuln summary {
+  list-style: none; display: grid; grid-template-columns: 5.2rem 1fr auto; grid-template-areas: "sev title urg" "sev where urg";
+  gap: .1rem .9rem; align-items: center; padding: .75rem 0; font-weight: 400;
+}
+.vuln summary::-webkit-details-marker { display: none; }
+.vuln-sev { grid-area: sev; font: 600 .7rem var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: .2rem .45rem; border-radius: 4px; text-align: center; }
+.sev-critical .vuln-sev { background: var(--down); color: var(--bg); }
+.sev-high .vuln-sev { background: var(--warn); color: var(--bg); }
+.sev-medium .vuln-sev { border: 1px solid var(--ink-2); color: var(--ink); }
+.sev-low .vuln-sev { border: 1px solid var(--line-2); color: var(--ink-3); }
+.vuln-title { grid-area: title; font-weight: 600; }
+.vuln-where { grid-area: where; font-size: .78rem; color: var(--ink-3); overflow-wrap: anywhere; }
+.vuln-urgency { grid-area: urg; font: .74rem var(--mono); color: var(--ink-3); white-space: nowrap; }
+.sev-critical .vuln-urgency { color: var(--down); }
+.sev-high .vuln-urgency { color: var(--warn); }
+.vuln summary:hover .vuln-title { text-decoration: underline; }
+.vuln-body { padding: 0 0 1rem 6.1rem; font-size: .92rem; }
+.vuln-body p { margin: 0 0 .5rem; }
+.vuln-body .code pre { font-size: .76rem; white-space: pre-wrap; padding-top: 2.8rem; }
+.scan-meta { margin: .8rem 0 0; font-size: .75rem; color: var(--ink-3); }
+@media (max-width: 640px) {
+  .threat-list li { grid-template-columns: 14px 1fr; }
+  .threat-advice { grid-column: 2; }
+  .vuln summary { grid-template-columns: 4.6rem 1fr; grid-template-areas: "sev title" "sev where" "sev urg"; }
+  .vuln-body { padding-left: 0; }
+}

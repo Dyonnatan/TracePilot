@@ -231,6 +231,8 @@ def build_state(
     sources: dict | None = None,
     history: dict | None = None,
     api_service: dict | None = None,
+    threats: dict | None = None,
+    security: dict | None = None,
 ) -> dict:
     """Monta tudo o que o diagrama, os indicadores e os alertas precisam.
     Nunca levanta exceção por dado faltando."""
@@ -311,12 +313,53 @@ def build_state(
             "action": f"Instale o {COLLECTOR_NAME} ou envie dados pela {API_NAME}.",
         })
 
+    # ---- Tráfego suspeito (quem acessa) ---------------------------------
+    users_status = web_status
+    users_facts = []
+    users_subtitle = "quem acessa"
+    if threats is not None:
+        users_facts = [
+            ("Tentativas de invasão", str(threats["attacks"])),
+            ("Varreduras", str(threats["scans"])),
+            ("Robôs / crawlers", str(threats["bots"])),
+            ("IPs hostis", str(threats["hostile_ips"])),
+        ]
+        users_status = _worst([web_status, threats["level"]])
+        if threats["level"] != "ok":
+            users_subtitle = "tráfego suspeito"
+        # Nos alertas, só o que é hostil de fato; robôs e varreduras ficam no
+        # cartão "Tráfego suspeito" (e já pesam no status do nó Usuários).
+        for e in threats["events"]:
+            if e["category"] not in ("attack", "bruteforce"):
+                continue
+            level = "down" if e["category"] in ("attack", "bruteforce") else "warn"
+            title = f"{e['category_text']}: {e['count']} requisições de {e['ip']}"
+            if e.get("success"):
+                title += " (servidor respondeu 200)"
+            alerts.append({
+                "level": level, "node": "users", "security": True,
+                "title": title, "detail": e["reasons"], "action": e["advice"],
+            })
+
+    # ---- Vulnerabilidades (da última análise) ----------------------------
+    if security:
+        node_for_area = {"código": "webapp", "site": "webapp", "servidor": "infra"}
+        for f in security.get("findings", []):
+            if f["severity"] not in ("critical", "high"):
+                continue
+            alerts.append({
+                "level": "down" if f["severity"] == "critical" else "warn",
+                "node": node_for_area.get(f["area"], "webapp"), "security": True,
+                "title": f"Risco {f['severity_label'].lower()}: {f['title']}",
+                "detail": f["where"], "action": f["fix"],
+            })
+
     nodes = {
         "users": {
-            "title": "Usuários", "subtitle": "quem acessa",
-            "status": web_status,
-            "what": "Quem usa o sistema. O status acompanha o do site.",
-            "facts": [],
+            "title": "Usuários", "subtitle": users_subtitle,
+            "status": users_status,
+            "what": "Quem acessa o sistema, incluindo robôs e tentativas de ataque.",
+            "facts": users_facts,
         },
         "webapp": {
             "title": "Site / App", "subtitle": system_name,
@@ -379,6 +422,8 @@ def build_state(
         "risk_count": len(risks),
         "agent_reporting": agent_reporting,
         "connection": conn,
+        "threats": threats,
+        "security": security,
         "recent_errors": recent_errors,
         "tech": tech,
         "system_name": system_name,
@@ -415,5 +460,7 @@ def example_state() -> dict:
         recent_errors=3,
         sources={"logs": 120, "traces": 340, "direct_api": False},
         api_service={"up": True},
+        threats={"level": "warn", "attacks": 0, "scans": 0, "bots": 42, "hostile_ips": 0,
+                 "bruteforce": 0, "search_bots": 3, "total_requests": 900, "events": []},
         history=store,
     )

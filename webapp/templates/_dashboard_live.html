@@ -1,4 +1,4 @@
-{% from "_diagram_macros.html" import architecture_diagram, resource_tiles %}
+{% from "_diagram_macros.html" import architecture_diagram, resource_tiles, tag %}
 {% set ov = state.overall %}
 <section class="overview" data-tour="overview">
   <div class="overall st-{{ ov.status }}">
@@ -28,7 +28,7 @@
     {% for a in state.alerts %}
     <li class="alert-row lvl-{{ a.level }}">
       <span class="dot"></span>
-      <div class="alert-body"><strong>{{ a.title }}</strong><p>{{ a.action }}</p></div>
+      <div class="alert-body"><strong>{{ a.title }}</strong>{% if a.detail %}<p class="alert-detail">{{ a.detail }}</p>{% endif %}<p>{{ a.action }}</p></div>
       <div class="alert-ctas">
         {% if a.investigate %}<a href="#investigar" class="btn btn-sm" data-prefill="{{ a.title }}">Investigar</a>{% endif %}
         <button type="button" class="btn-line btn-sm" data-focus-node="{{ a.node }}">Ver no mapa</button>
@@ -38,3 +38,38 @@
   </ul>
 </section>
 {% endif %}
+
+{% set th = state.threats %}
+<section class="card" data-tour="threats">
+  <div class="section-head">
+    <span class="label">Tráfego suspeito · 15 min</span>
+    {% if th %}{{ tag(th.level, {'ok':'nada suspeito','warn':'atenção','down':'ataque detectado'}[th.level]) }}{% endif %}
+  </div>
+  {% if th is none %}
+  <p class="empty">Sem dados de tráfego (a análise usa os rastros da TracePilot API).</p>
+  {% else %}
+  <div class="stat-row">
+    <div class="{{ 'c-down' if th.attacks else 'zero' }}"><strong>{{ th.attacks }}</strong><span class="label">tentativas de invasão</span></div>
+    <div class="{{ 'c-warn' if th.scans else 'zero' }}"><strong>{{ th.scans }}</strong><span class="label">varreduras</span></div>
+    <div class="{{ 'c-warn' if th.bots else 'zero' }}"><strong>{{ th.bots }}</strong><span class="label">robôs</span></div>
+    <div class="zero"><strong>{{ th.search_bots }}</strong><span class="label">buscadores</span></div>
+  </div>
+  {% if th.events %}
+  <ul class="threat-list">
+    {% for e in th.events %}
+    <li class="lvl-{{ 'down' if e.category in ('attack','bruteforce') else ('warn' if e.category in ('scan','bot') else 'info') }}">
+      <span class="dot"></span>
+      <div class="threat-main">
+        <strong>{{ e.category_text }}</strong> <span class="mono muted">{{ e.ip }} · {{ e.count }}×</span>
+        <p class="alert-detail">{{ e.reasons }}</p>
+        {% if e.samples %}<code class="threat-sample">{{ e.samples | join('   ') }}</code>{% endif %}
+      </div>
+      <p class="threat-advice">{{ e.advice }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">Nenhum robô ou tentativa de invasão nos últimos 15 minutos.</p>
+  {% endif %}
+  {% endif %}
+</section>
