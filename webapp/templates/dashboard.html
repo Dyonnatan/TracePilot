@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}TracePilot — Painel{% endblock %}
+{% block content %}
+
+<section class="panel monitoring">
+  <h2>Monitoramento</h2>
+  <div class="status-row">
+    <div class="status-card {{ 'ok' if demo_app.up else 'down' }}">
+      <span class="dot"></span>
+      <div>
+        <strong>App monitorada</strong>
+        <div class="muted">{{ demo_app.url }} — {{ 'no ar' if demo_app.up else 'fora do ar' }}</div>
+      </div>
+    </div>
+    <div class="status-card {{ 'ok' if openobserve.up else 'down' }}">
+      <span class="dot"></span>
+      <div>
+        <strong>Telemetria (OpenObserve)</strong>
+        {% if openobserve.up %}
+          <div class="muted">
+            {% for s in openobserve.streams %}{{ s.type }}: {{ s.doc_count }} docs{% if not loop.last %} · {% endif %}{% endfor %}
+          </div>
+        {% else %}
+          <div class="muted">indisponível</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if openobserve.up %}
+  <a class="link-out" href="{{ openobserve.url }}" target="_blank">Ver dados brutos no OpenObserve →</a>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Investigar um problema</h2>
+  <form method="post" action="/investigations" class="investigate-form">
+    <label>
+      O que está acontecendo?
+      <textarea name="error_report" placeholder="ex.: cliente reclamou que não conseguiu finalizar a compra, apareceu erro 500" required></textarea>
+    </label>
+    <label class="inline">
+      Serviço
+      <input type="text" name="service" value="tracepilot-demo-app">
+    </label>
+    <button type="submit">Investigar</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Investigações</h2>
+  {% if investigations %}
+  <table class="investigations">
+    <thead>
+      <tr><th>Quando</th><th>Relato</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for inv in investigations %}
+      <tr>
+        <td class="muted">{{ inv.created_at | int | timestamp_to_str if inv.created_at else '-' }}</td>
+        <td>{{ inv.error_report }}</td>
+        <td>
+          {% if inv.status == 'done' and inv.verified %}<span class="badge ok">✅ sustentado</span>
+          {% elif inv.status == 'done' %}<span class="badge warn">⚠️ insuficiente</span>
+          {% elif inv.status == 'running' %}<span class="badge pending">⏳ rodando</span>
+          {% elif inv.status == 'error' %}<span class="badge down">❌ erro</span>
+          {% else %}<span class="badge">{{ inv.status }}</span>{% endif %}
+        </td>
+        <td><a href="/investigations/{{ inv.id }}">ver →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Nenhuma investigação ainda.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

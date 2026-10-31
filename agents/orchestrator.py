@@ -9,6 +9,7 @@ docs/code-architecture.md.
 """
 import argparse
 import json
+import time
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -19,6 +20,7 @@ from agents.tools.openobserve_client import OpenObserveClient
 from agents.specialists import logs_agent, metrics_agent, traces_agent
 from agents import diagnosis_agent, verifier_agent
 from agents.report import build_report
+from agents import report_store
 
 
 class IncidentState(TypedDict, total=False):
@@ -84,6 +86,69 @@ def build_graph() -> StateGraph:
     return graph.compile()
 
 
+def run_investigation(
+    error_report: str,
+    service: str = "tracepilot-demo-app",
+    trace_id: str | None = None,
+    metric_name: str = "duration",
+    window_minutes: int = 60,
+    investigation_id: str | None = None,
+) -> dict:
+    """Roda uma investigação completa e persiste o resultado em `reports/`.
+
+    Função reutilizável por quem for chamar os agentes fora da CLI (ex.: o
+    `webapp/`) — mantém a lógica de montar o estado inicial, invocar o
+    grafo e salvar o resultado num único lugar, em vez de duplicá-la.
+    """
+    investigation_id = investigation_id or report_store.new_investigation_id()
+    now_us = int(time.time() * 1_000_000)
+    start_us = now_us - window_minutes * 60 * 1_000_000
+
+    initial_state: IncidentState = {
+        "error_report": error_report,
+        "service": service,
+        "metric_name": metric_name,
+        "start_time": start_us,
+        "end_time": now_us,
+    }
+    if trace_id:
+        initial_state["trace_id"] = trace_id
+
+    report_store.save(
+        investigation_id,
+        {
+            "id": investigation_id,
+            "status": "running",
+            "created_at": time.time(),
+            "error_report": error_report,
+            "service": service,
+        },
+    )
+
+    try:
+        final_state = build_graph().invoke(initial_state)
+    except Exception as exc:
+        record = {
+            "id": investigation_id,
+            "status": "error",
+            "created_at": time.time(),
+            "error_report": error_report,
+            "service": service,
+            "error": str(exc),
+        }
+        report_store.save(investigation_id, record)
+        raise
+
+    record = {
+        "id": investigation_id,
+        "status": "done",
+        "created_at": time.time(),
+        **final_state,
+    }
+    report_store.save(investigation_id, record)
+    return record
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Investiga um incidente com os agentes do TracePilot.")
     parser.add_argument("error_report", help="Relato do erro (ex.: mensagem do usuário ou do endpoint).")
@@ -96,28 +161,19 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    import time
-
     args = _parse_args()
-    now_us = int(time.time() * 1_000_000)
-    start_us = now_us - args.window_minutes * 60 * 1_000_000
-
-    initial_state: IncidentState = {
-        "error_report": args.error_report,
-        "service": args.service,
-        "metric_name": args.metric_name,
-        "start_time": start_us,
-        "end_time": now_us,
-    }
-    if args.trace_id:
-        initial_state["trace_id"] = args.trace_id
-
-    final_state = build_graph().invoke(initial_state)
+    record = run_investigation(
+        error_report=args.error_report,
+        service=args.service,
+        trace_id=args.trace_id,
+        metric_name=args.metric_name,
+        window_minutes=args.window_minutes,
+    )
 
     if args.json:
-        print(json.dumps(final_state, default=str, ensure_ascii=False, indent=2))
+        print(json.dumps(record, default=str, ensure_ascii=False, indent=2))
     else:
-        print(final_state["report"])
+        print(record["report"])
 
 
 if __name__ == "__main__":

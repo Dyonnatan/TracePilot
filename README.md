@@ -57,19 +57,20 @@ Detalhe módulo a módulo em [docs/code-architecture.md](docs/code-architecture.
 ```
 TracePilot/
 ├── agents/            # orquestrador LangGraph + agentes especialistas + providers de LLM
+├── webapp/              # painel web (FastAPI) para monitorar e investigar
 ├── demo_app/           # app FastAPI instrumentada, com falhas controladas
 ├── benchmark/          # notas de avaliação (OpenRCA)
-├── reports/             # relatórios de incidente gerados
+├── reports/             # investigações persistidas (JSON)
 ├── docs/                 # arquitetura geral, de código e glossário de conceitos
 ├── docker-compose.yml    # OpenObserve + OTel Collector
 └── otel-collector-config.yaml
 ```
 
-> Estágio atual: **MVP funcional**. O fluxo completo (logs → métricas →
-> traces → diagnóstico → verificação → relatório) roda de ponta a ponta
-> contra uma instância real do OpenObserve, usando a **OpenRouter** como
-> backend de LLM. Detalhe do que está implementado vs. pendente em
-> `docs/code-architecture.md`.
+> Estágio atual: **MVP funcional com interface web**. O fluxo completo
+> (logs → métricas → traces → diagnóstico → verificação → relatório) roda
+> de ponta a ponta contra uma instância real do OpenObserve, com um
+> painel web pra disparar investigações e fazer drill-down na evidência.
+> Detalhe do que está implementado vs. pendente em `docs/code-architecture.md`.
 
 ## Como rodar localmente
 
@@ -82,26 +83,34 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Rodar a aplicação de teste instrumentada
+# 3. Rodar a aplicação de teste instrumentada (outro terminal)
 cd demo_app && pip install -r requirements.txt
-uvicorn main:app --reload
+uvicorn main:app --host 127.0.0.1 --port 8099
 
-# 4. Configurar a chave da OpenRouter
-cp .env.example .env   # preencher OPENROUTER_API_KEY
+# 4. Configurar o .env (backend de LLM local via Ollama, por padrão)
+cp .env.example .env
+ollama pull gemma3:4b
 
-# 5. Gerar uma falha e investigar
-curl -X POST localhost:8000/checkout -H "Content-Type: application/json" \
-  -d '{"order_id":"1","quantity":0,"budget":700}'
+# 5. Subir o painel web (outro terminal)
+uvicorn webapp.main:app --host 127.0.0.1 --port 8800
+# abra http://localhost:8800 — gere uma falha no demo_app e dispare a
+# investigação direto pelo formulário
+
+# (alternativa: CLI, sem o painel)
 python3 agents/orchestrator.py "checkout falhando com erro 500" \
   --service tracepilot-demo-app
 ```
 
-Backend de LLM via **OpenRouter** (catálogo único para modelos baratos e
-avançados — ver [openrouter.ai/models](https://openrouter.ai/models)):
-comece com um modelo pequeno/barato (`OPENROUTER_MODEL` no `.env`, padrão
-`openai/gpt-4o-mini`) para validar o pipeline sem custo alto, e troque só
-essa variável quando quiser subir para um modelo mais avançado — não
-precisa mexer em código.
+> Ao reproduzir localmente em máquinas com pouca RAM: suba os serviços um
+> de cada vez (Docker → demo_app → painel) em vez de todos juntos — já
+> travou uma máquina com 19GB de RAM e pouco swap ao carregar Docker +
+> modelo local + Laya tudo de uma vez.
+
+Backend de LLM local via **Ollama** (`LLM_BACKEND=local` no `.env`,
+padrão). Comece com `gemma3:4b` (~3,4GB, roda numa GPU de 4GB como a
+GTX 1650) e troque só `OLLAMA_MODEL` pra testar outro. Também dá pra usar
+a **OpenRouter** (`LLM_BACKEND=cloud`) se preferir backend em nuvem — ver
+[openrouter.ai/models](https://openrouter.ai/models) e `.env.example`.
 
 ## Roadmap
 

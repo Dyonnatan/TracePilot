@@ -7,8 +7,35 @@
 >
 > **Status**: MVP funcional — o fluxo linear completo (logs → métricas →
 > traces → diagnóstico → verificação → relatório) roda de ponta a ponta
-> contra uma instância real do OpenObserve, usando a OpenRouter como backend
-> de LLM (modelo pequeno/barato por padrão, trocável via `.env`).
+> contra uma instância real do OpenObserve, com backend de LLM local
+> (Ollama) por padrão, e uma interface web (`webapp/`) pra disparar
+> investigações e fazer drill-down na evidência.
+
+## `webapp/` — interface web
+
+FastAPI + Jinja2 (sem framework JS), pensada pro dono da aplicação (não
+necessariamente alguém com conhecimento de observabilidade) monitorar,
+disparar investigações e aprofundar na evidência.
+
+| Rota | O que faz |
+|---|---|
+| `GET /` | Painel: status da app monitorada + do OpenObserve, formulário pra disparar investigação, lista das investigações já feitas. |
+| `POST /investigations` | Dispara `run_investigation()` numa thread em background (não bloqueia a requisição) e redireciona pro detalhe. |
+| `GET /investigations/{id}` | Detalhe: se `running`, faz polling via JS a cada 3s até terminar; se `done`, mostra causa provável, verificação (incluindo a checagem do Laya), e um drill-down (`<details>`) com a evidência bruta por fonte (logs/métricas/traces). |
+| `GET /api/investigations/{id}` | JSON usado pelo polling da página de detalhe. |
+| `GET /api/health` | Status da app monitorada + streams do OpenObserve, em JSON. |
+
+Decisão de design: thread em background (não fila/worker) — MVP de
+hackathon, uma investigação por vez é suficiente, evita a complexidade
+operacional de um broker. Persistência via `agents/report_store.py`
+(arquivos JSON em `reports/`, não banco de dados — mesmo raciocínio).
+
+**Lição aprendida rodando isso nesta máquina**: subir Docker (OpenObserve +
+collector) + `demo_app` + Ollama com um modelo de 4B + o Laya, tudo ao
+mesmo tempo, travou a máquina uma vez (RAM de 19GB, mas só 512MB de swap).
+Depois disso, o processo de subir os serviços passou a ser sequencial, com
+checagem de memória (`free -h`) entre cada etapa — vale manter esse
+cuidado ao reproduzir localmente em máquinas com pouca RAM/swap.
 
 ## `agents/llm/` — interface comum de LLM
 
@@ -87,14 +114,25 @@ deliberada: manter o custo de uma investigação em no máximo 5 chamadas de
 LLM (logs, métricas, traces, diagnóstico, verificação), já que o MVP usa
 modelos pequenos/baratos via OpenRouter e cada chamada extra tem custo.
 
+## `agents/report_store.py` — persistência de investigações
+
+Módulo novo: salva cada investigação como um JSON em `reports/` (id,
+status — `running`/`done`/`error` —, timestamps, e o estado final completo
+quando termina). Decisão de design: arquivo simples em vez de banco de
+dados — volume baixo, sem concorrência pesada de escrita, típico de MVP.
+É o que permite a interface web listar investigações passadas e fazer
+drill-down na evidência bruta sem precisar rodar tudo de novo.
+
 ## `agents/orchestrator.py` — o grafo
 
 Define `IncidentState` (TypedDict) e monta um `StateGraph` do LangGraph
 ligando `orchestrator → logs_agent → metrics_agent → traces_agent →
-diagnosis_agent → verifier_agent → report → END`. Também expõe uma CLI
-(`python3 agents/orchestrator.py "relato do erro" [--service ...]
-[--trace-id ...] [--json]`) para rodar uma investigação completa e
-imprimir o relatório (ou o estado completo em JSON, com `--json`).
+diagnosis_agent → verifier_agent → report → END`. Expõe
+`run_investigation(error_report, service, trace_id, ...)` como função
+reutilizável (usada tanto pela CLI quanto pelo `webapp/`) que monta o
+estado inicial, roda o grafo e persiste o resultado via `report_store`.
+A CLI (`python3 agents/orchestrator.py "relato do erro" [--service ...]
+[--trace-id ...] [--json]`) é hoje uma casca fina sobre essa função.
 
 Decisão de design: LangGraph (em vez de CrewAI) porque o fluxo real não é
 linear — o `orchestrator_node` deve decidir dinamicamente qual especialista

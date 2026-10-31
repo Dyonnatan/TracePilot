@@ -37,6 +37,24 @@ class OpenObserveClient:
             "OPENOBSERVE_TOKEN, ou OPENOBSERVE_USER + OPENOBSERVE_PASSWORD no .env."
         )
 
+    def list_streams(self) -> list[dict]:
+        """Lista os streams existentes (nome, tipo, nº de documentos) — usado
+        pelo painel de monitoramento da interface web, não pelos agentes.
+        """
+        headers, auth = self._auth_headers_and_auth()
+        url = f"{self.base_url}/api/{self.org}/streams"
+        response = httpx.get(url, headers=headers, auth=auth, timeout=15)
+        response.raise_for_status()
+        streams = response.json().get("list", [])
+        return [
+            {
+                "name": s.get("name"),
+                "type": s.get("stream_type"),
+                "doc_count": (s.get("stats") or {}).get("doc_num", 0),
+            }
+            for s in streams
+        ]
+
     def _search(
         self,
         stream_type: str,

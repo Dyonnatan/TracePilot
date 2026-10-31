@@ -9,6 +9,12 @@ ollama>=0.3
 # Modelo de decisão tipada ("System 1") usado no verifier_agent
 laya>=0.1
 
+# Interface web
+fastapi>=0.115
+uvicorn[standard]>=0.30
+jinja2>=3.1
+python-multipart>=0.0.12
+
 # Observabilidade
 opentelemetry-sdk>=1.27
 opentelemetry-exporter-otlp>=1.27
