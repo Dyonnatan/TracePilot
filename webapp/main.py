@@ -25,11 +25,12 @@ from agents.orchestrator import run_investigation
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.tools import resource_snapshot as resource_snapshot_tool
 from agents.tools import github_inspector
-from webapp import monitoring
+from webapp import monitoring, presets
 
 BASE_DIR = Path(__file__).resolve().parent
 DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8099")
 OPENOBSERVE_UI_URL = os.getenv("OPENOBSERVE_URL", "http://localhost:5080")
+MONITORED_SERVICE = os.getenv("MONITORED_SERVICE_NAME", "tracepilot-demo-app")
 
 COOKIE_NAME = "tp_name"
 COOKIE_EMAIL = "tp_email"
@@ -58,6 +59,7 @@ def _current_user(request: Request) -> dict | None:
 
 
 templates.env.globals["current_user"] = _current_user
+templates.env.globals["active_preset"] = presets.active
 
 
 def _require_login(request: Request) -> RedirectResponse | None:
@@ -88,14 +90,37 @@ def _onboarding_guard(request: Request) -> RedirectResponse | None:
     return None
 
 
+def _app_url() -> str:
+    """URL do sistema monitorado: a informada no onboarding, senão a do
+    preset ativo, senão `DEMO_APP_URL`."""
+    profile = workspace_store.load()
+    preset = presets.active() or {}
+    return (profile.get("app_url") or preset.get("app_url") or DEMO_APP_URL).rstrip("/")
+
+
+def _monitored_services() -> list[str]:
+    """Serviço principal primeiro (é o padrão das investigações), depois
+    os relacionados — todos entram na contagem de erros recentes."""
+    profile = workspace_store.load()
+    preset = presets.active() or {}
+    main = profile.get("service_name") or preset.get("service_name") or MONITORED_SERVICE
+    related = profile.get("related_services") or preset.get("related_services") or []
+    return [main] + [s for s in related if s != main]
+
+
 def _demo_app_status() -> dict:
+    """Sobe = responde 2xx em `/health` (convenção dos nossos serviços) ou,
+    se essa rota não existir, na raiz."""
+    url = _app_url()
     started = time.perf_counter()
     try:
-        resp = httpx.get(f"{DEMO_APP_URL}/health", timeout=3)
+        resp = httpx.get(f"{url}/health", timeout=3)
+        if resp.status_code == 404:
+            resp = httpx.get(url or "/", timeout=3)
         latency_ms = (time.perf_counter() - started) * 1000
-        return {"up": resp.status_code == 200, "url": DEMO_APP_URL, "latency_ms": latency_ms}
+        return {"up": resp.is_success, "url": url, "latency_ms": latency_ms}
     except httpx.HTTPError:
-        return {"up": False, "url": DEMO_APP_URL, "latency_ms": None}
+        return {"up": False, "url": url, "latency_ms": None}
 
 
 def _openobserve_status() -> dict:
@@ -120,21 +145,23 @@ ENVIRONMENT_LABELS = {
     "production": "Já em produção",
 }
 
-MONITORED_SERVICE = os.getenv("MONITORED_SERVICE_NAME", "tracepilot-demo-app")
-
-
 def _recent_error_count() -> int | None:
     """Erros registrados pelo sistema monitorado na janela recente. `None`
     quando não dá pra saber (OpenObserve fora) — diferente de `0`."""
     try:
         start_us = int((time.time() - monitoring.RECENT_ERRORS_WINDOW_MIN * 60) * 1_000_000)
-        hits = OpenObserveClient().query_logs(
-            severities=["ERROR", "FATAL", "CRITICAL"],
-            service=MONITORED_SERVICE,
-            start_time=start_us,
-            size=100,
+        client = OpenObserveClient()
+        return sum(
+            len(
+                client.query_logs(
+                    severities=["ERROR", "FATAL", "CRITICAL"],
+                    service=service,
+                    start_time=start_us,
+                    size=100,
+                )
+            )
+            for service in _monitored_services()
         )
-        return len(hits)
     except Exception:
         return None
 
@@ -183,7 +210,9 @@ def onboarding_about_form(request: Request):
         return guard
     workspace_store.set_current_step("about")
     return templates.TemplateResponse(
-        request, "onboarding_about.html", {"step_index": 1, "profile": workspace_store.load()}
+        request,
+        "onboarding_about.html",
+        {"step_index": 1, "form": presets.form_values(workspace_store.load())},
     )
 
 
@@ -196,6 +225,8 @@ def onboarding_about_submit(
     dev_method_tool: str = Form(""),
     environment: str = Form(""),
     environment_notes: str = Form(""),
+    app_url: str = Form(""),
+    service_name: str = Form(""),
 ):
     guard = _onboarding_guard(request)
     if guard:
@@ -207,7 +238,14 @@ def onboarding_about_submit(
         dev_method_tool=dev_method_tool.strip(),
         environment=environment,
         environment_notes=environment_notes.strip(),
+        app_url=app_url.strip().rstrip("/") or None,
+        service_name=service_name.strip() or None,
     )
+    # Serviços relacionados não têm campo no formulário (detalhe técnico
+    # demais pra jornada); vêm do preset quando o serviço principal bate.
+    preset = presets.active() or {}
+    if preset and service_name.strip() == preset.get("service_name"):
+        workspace_store.update(related_services=preset.get("related_services", []))
     return RedirectResponse(url="/onboarding/install", status_code=303)
 
 
@@ -217,7 +255,16 @@ def onboarding_install(request: Request):
     if guard:
         return guard
     workspace_store.set_current_step("install")
-    return templates.TemplateResponse(request, "onboarding_install.html", {"step_index": 2})
+    preset = presets.active() or {}
+    return templates.TemplateResponse(
+        request,
+        "onboarding_install.html",
+        {
+            "step_index": 2,
+            "preset": preset,
+            "otlp_endpoint": preset.get("otlp_endpoint", "SEU-COLETOR:4317"),
+        },
+    )
 
 
 @app.get("/onboarding/repo")
@@ -227,7 +274,9 @@ def onboarding_repo_form(request: Request):
         return guard
     workspace_store.set_current_step("repo")
     return templates.TemplateResponse(
-        request, "onboarding_repo.html", {"step_index": 3, "profile": workspace_store.load()}
+        request,
+        "onboarding_repo.html",
+        {"step_index": 3, "form": presets.form_values(workspace_store.load())},
     )
 
 
@@ -237,8 +286,12 @@ def onboarding_repo_submit(request: Request, repo_url: str = Form("")):
     if guard:
         return guard
     repo_url = repo_url.strip()
-    repo_info = github_inspector.inspect_repo(repo_url) if repo_url else None
-    workspace_store.update(repo_url=repo_url or None, repo_info=repo_info)
+    local_path = None
+    preset = presets.active() or {}
+    if repo_url and preset.get("repo_local_path") and repo_url.rstrip("/") == preset.get("repo_url", "").rstrip("/"):
+        local_path = str(BASE_DIR.parent / preset["repo_local_path"])
+    repo_info = github_inspector.inspect_repo(repo_url, local_path=local_path) if repo_url else None
+    workspace_store.update(repo_url=repo_url or None, repo_info=repo_info, repo_local_path=local_path)
     return RedirectResponse(url="/onboarding/connectivity", status_code=303)
 
 
@@ -330,7 +383,16 @@ def login_form(request: Request):
     if _current_user(request) is not None:
         target = "/dashboard" if workspace_store.is_onboarded() else "/onboarding"
         return RedirectResponse(url=target, status_code=303)
-    return templates.TemplateResponse(request, "login.html", {})
+    profile_user = workspace_store.load().get("user") or {}
+    preset_user = (presets.active() or {}).get("user") or {}
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "prefill_name": profile_user.get("name") or preset_user.get("name", ""),
+            "prefill_email": profile_user.get("email") or preset_user.get("email", ""),
+        },
+    )
 
 
 @app.post("/login")
@@ -371,7 +433,7 @@ def _dashboard_context(request: Request) -> dict:
         "state": _collect_state(),
         "investigations": report_store.list_all(),
         "openobserve_url": OPENOBSERVE_UI_URL,
-        "monitored_service": MONITORED_SERVICE,
+        "monitored_service": _monitored_services()[0],
     }
 
 

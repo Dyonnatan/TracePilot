@@ -1,0 +1,23 @@
+{
+  "id": "reference-environment",
+  "label": "Ambiente de referência — loja Apex Space (branch feat/reference-environment)",
+  "user": {
+    "name": "Demo TracePilot",
+    "email": "demo@tracepilot.local"
+  },
+  "system_name": "Apex Space",
+  "objective": "Loja online de periféricos e acessórios: vitrine com busca, carrinho, cupons de desconto e checkout com Pix, cartão ou boleto. O backend (shop-api) busca o catálogo e grava os pedidos no Postgres, e autoriza o pagamento num serviço separado (payment-service).",
+  "dev_method": "ai_assisted",
+  "dev_method_tool": "Claude Code",
+  "environment": "local_server",
+  "environment_notes": "Docker Compose na própria máquina: shop-api (porta 8088), payment-service, Postgres 17, toxiproxy e um gerador de tráfego (~2 req/s). Telemetria via OpenTelemetry para o collector do TracePilot (porta 4317), com métricas do host ligadas.",
+  "app_url": "http://localhost:8088",
+  "service_name": "shop-api",
+  "related_services": ["payment-service"],
+  "repo_url": "https://github.com/Dyonnatan/TracePilot",
+  "repo_local_path": "demo_app",
+  "otlp_endpoint": "localhost:4317",
+  "setup_title": "Suba a loja Apex Space com a telemetria",
+  "setup_commands": "git fetch origin feat/reference-environment\ngit switch feat/reference-environment   # ou faça merge na sua branch\ncd demo_app\nmake up      # OpenObserve + Collector (com métricas do host) + loja\nmake ps      # confira se shop-api, payment-service e postgres estão de pé",
+  "setup_notes": "A loja fica em http://localhost:8088 e o painel de falhas (para simular incidentes) em http://localhost:8090."
+}

@@ -11,10 +11,15 @@ arquitetura detectada — sem precisar explicar nada técnico.</p>
 <form method="post" action="/onboarding/repo" class="form-stack">
   <label>
     Link do repositório
-    <input type="url" name="repo_url" value="{{ profile.repo_url or '' }}" placeholder="https://github.com/sua-conta/seu-repositorio">
+    <input type="url" name="repo_url" value="{{ form.repo_url or '' }}" placeholder="https://github.com/sua-conta/seu-repositorio">
   </label>
   <p class="muted small">Não tem repositório público, ou não quer
   compartilhar? Sem problema — deixe em branco e continue.</p>
+  {% set preset = active_preset() %}
+  {% if preset and preset.repo_local_path %}
+  <p class="inline-note">💡 Se o GitHub não liberar a análise (repositório privado), o
+  TracePilot analisa a cópia local do código em <code>{{ preset.repo_local_path }}/</code>.</p>
+  {% endif %}
 
   <div class="wizard-actions">
     <button type="submit">Continuar →</button>

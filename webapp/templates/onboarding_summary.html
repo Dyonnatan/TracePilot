@@ -28,7 +28,7 @@ ajustar qualquer coisa depois.</p>
       <li class="{{ 'ck-ok' if state.nodes.tracepilot.status == 'ok' else 'ck-warn' }}">Armazenamento de dados: <strong>{{ 'conectado' if state.nodes.tracepilot.status == 'ok' else 'indisponível' }}</strong></li>
       <li class="{{ 'ck-ok' if state.agent_reporting else 'ck-skip' }}">Agente local: <strong>{{ 'enviando dados' if state.agent_reporting else 'ainda não conectado' }}</strong>{% if not state.agent_reporting %} <span class="muted">— usando medição do host do painel por enquanto</span>{% endif %}</li>
       {% if repo_info and repo_info.analyzed %}
-      <li class="ck-ok">Repositório: <strong>{{ repo_info.owner }}/{{ repo_info.name }}</strong></li>
+      <li class="ck-ok">Repositório: <strong>{{ repo_info.owner }}/{{ repo_info.name }}</strong>{% if repo_info.source == 'local' %} <span class="muted">— analisado pela cópia local ({{ repo_info.local_path.split('/')[-1] }}/), o GitHub não liberou acesso</span>{% endif %}</li>
       {% elif profile.repo_url %}
       <li class="ck-warn">Repositório informado, mas não analisado <span class="muted">— {{ {'not_github': 'por enquanto só analisamos links do GitHub', 'not_found': 'repositório privado ou não encontrado (para repositório privado, configure GITHUB_TOKEN)'}.get(repo_info.reason if repo_info else '', 'o GitHub não respondeu agora') }}</span></li>
       {% else %}

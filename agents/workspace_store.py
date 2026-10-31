@@ -31,7 +31,14 @@ def _default_profile() -> dict:
         "dev_method_tool": None,
         "environment": None,
         "environment_notes": None,
+        # Onde o sistema monitorado responde e com que nome ele aparece na
+        # telemetria (OTel `service.name`) — usados no health check, na
+        # contagem de erros e como serviço padrão das investigações.
+        "app_url": None,
+        "service_name": None,
+        "related_services": [],
         "repo_url": None,
+        "repo_local_path": None,
         "repo_info": None,
         "host_snapshot": None,
         "onboarding": {

@@ -9,6 +9,10 @@
   </div>
   {% endfor %}
 </nav>
+{% set preset = active_preset() %}
+{% if preset %}
+<div class="preset-banner">⚡ <span><b>Modo demonstração:</b> respostas já preenchidas para o {{ preset.label }}. É só ir avançando — dá para editar qualquer campo.</span></div>
+{% endif %}
 <div class="wizard-card">
   {% block step %}{% endblock %}
 </div>

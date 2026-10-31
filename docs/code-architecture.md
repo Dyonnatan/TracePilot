@@ -39,6 +39,18 @@ conecta a ele nesta versão. Quando o agente Rust não reporta,
 `resource_snapshot.py` mede CPU/RAM/rede (`/proc`) e GPU (`nvidia-smi`)
 do host do **painel**, sempre marcado como `source="local"` na tela.
 
+**Preset de demonstração** (`webapp/presets.py` + `webapp/presets/*.json`,
+escolhido por `TRACEPILOT_PRESET`, padrão `reference-environment`):
+pré-preenche login e questionário com os dados do ambiente de referência
+(loja Apex Space, branch `feat/reference-environment`: `shop-api` em
+`http://localhost:8088`, serviços `shop-api` + `payment-service`), mostra
+os comandos `make up` no passo de instalação e aponta `demo_app/` como
+cópia local do código — `github_inspector` cai nela quando a API do
+GitHub não serve (repo privado sem `GITHUB_TOKEN`). Resposta já salva no
+perfil sempre vence o preset. A URL e o serviço monitorados vêm do perfil
+(`app_url`, `service_name`, `related_services`), com `DEMO_APP_URL` /
+`MONITORED_SERVICE_NAME` só como fallback.
+
 Decisão de design: thread em background (não fila/worker) — MVP de
 hackathon, uma investigação por vez é suficiente, evita a complexidade
 operacional de um broker. Persistência via `agents/report_store.py`

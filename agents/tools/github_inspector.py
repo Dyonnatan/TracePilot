@@ -8,10 +8,19 @@ sem o custo/risco de baixar e analisar código de verdade.
 Decisão de design: só funciona para `github.com` (a esmagadora maioria
 dos repositórios hoje) — qualquer outra URL ou falha na API degrada para
 "informado, mas não analisado automaticamente", nunca trava o onboarding.
+
+Fallback local: quando a API não serve (repo privado sem token, sem rede)
+e o chamador sabe onde há uma cópia local do código (`local_path`, ex.:
+o preset do ambiente de referência aponta `demo_app/`), conta bytes por
+linguagem nos arquivos versionados (`git ls-files`) — mesma ideia do
+breakdown do GitHub, marcado com `source="local"` para a tela dizer de
+onde veio.
 """
 import os
 import re
+import subprocess
 import time
+from pathlib import Path
 
 import httpx
 
@@ -31,7 +40,74 @@ def _parse_github_url(repo_url: str) -> tuple[str, str] | None:
     return match.group(1), match.group(2)
 
 
-def inspect_repo(repo_url: str) -> dict:
+# Extensão → nome de linguagem como o GitHub mostra. Dados/config/docs
+# (json, yaml, md, svg) ficam de fora, como no breakdown do GitHub.
+_EXT_LANGUAGE = {
+    ".py": "Python", ".js": "JavaScript", ".mjs": "JavaScript", ".ts": "TypeScript",
+    ".tsx": "TypeScript", ".jsx": "JavaScript", ".css": "CSS", ".scss": "SCSS",
+    ".html": "HTML", ".sql": "SQL", ".rs": "Rust", ".go": "Go", ".java": "Java",
+    ".kt": "Kotlin", ".rb": "Ruby", ".php": "PHP", ".cs": "C#", ".sh": "Shell",
+    ".vue": "Vue", ".svelte": "Svelte", ".dart": "Dart", ".swift": "Swift",
+}
+_NAME_LANGUAGE = {"Dockerfile": "Dockerfile", "Makefile": "Makefile"}
+
+
+def _local_languages(path: str) -> dict[str, int] | None:
+    root = Path(path)
+    if not root.is_dir():
+        return None
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", "."],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        files = [f for f in out.stdout.split("\0") if f]
+    except (OSError, subprocess.SubprocessError):
+        files = [str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()]
+    languages: dict[str, int] = {}
+    for rel in files:
+        p = root / rel
+        lang = _NAME_LANGUAGE.get(p.name) or _EXT_LANGUAGE.get(p.suffix.lower())
+        if not lang:
+            continue
+        try:
+            languages[lang] = languages.get(lang, 0) + p.stat().st_size
+        except OSError:
+            continue
+    return languages or None
+
+
+def _inspect_local(repo_url: str, owner: str, name: str, local_path: str, api_reason: str) -> dict | None:
+    languages = _local_languages(local_path)
+    if not languages:
+        return None
+    return {
+        "analyzed": True,
+        "source": "local",
+        "api_reason": api_reason,
+        "local_path": local_path,
+        "repo_url": repo_url,
+        "owner": owner,
+        "name": name,
+        "description": None,
+        "stars": None,
+        "default_branch": None,
+        "pushed_at": None,
+        "languages": languages,
+        "primary_language": max(languages, key=languages.get),
+        "checked_at": time.time(),
+    }
+
+
+def inspect_repo(repo_url: str, local_path: str | None = None) -> dict:
+    result = _inspect_github(repo_url)
+    if result["analyzed"] or not local_path:
+        return result
+    parsed = _parse_github_url(repo_url) or ("local", Path(local_path).name)
+    return _inspect_local(repo_url, parsed[0], parsed[1], local_path, result["reason"]) or result
+
+
+def _inspect_github(repo_url: str) -> dict:
     parsed = _parse_github_url(repo_url)
     if parsed is None:
         return {"analyzed": False, "reason": "not_github", "repo_url": repo_url}
@@ -70,5 +146,6 @@ def inspect_repo(repo_url: str) -> dict:
         "pushed_at": repo_data.get("pushed_at"),
         "languages": languages,
         "primary_language": primary_language,
+        "source": "github",
         "checked_at": time.time(),
     }

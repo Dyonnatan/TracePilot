@@ -2,10 +2,23 @@
 {% block title %}Instalação — TracePilot{% endblock %}
 {% block step %}
 
-<h1>Instale o agente leve no servidor</h1>
+<h1>{{ "Prepare o servidor e instale o agente" if preset.setup_commands else "Instale o agente leve no servidor" }}</h1>
 <p class="muted">O agente é um programa pequeno (~2MB) que roda no
 servidor que você quer monitorar. Ele só lê uso de CPU, memória, disco e
 rede — nunca conteúdo de arquivo, senha ou comando digitado.</p>
+
+{% if preset.setup_commands %}
+<h3 class="install-step-title">1. {{ preset.setup_title }}</h3>
+<div class="code-box">
+  <div class="code-box-header">
+    <span>💻 Na raiz do repositório TracePilot</span>
+    <button type="button" class="copy-btn" data-copy-target="setup-cmd-text">Copiar</button>
+  </div>
+  <textarea id="setup-cmd-text" readonly rows="{{ preset.setup_commands.count('\n') + 1 }}">{{ preset.setup_commands }}</textarea>
+</div>
+{% if preset.setup_notes %}<p class="muted small">{{ preset.setup_notes }}</p>{% endif %}
+<h3 class="install-step-title">2. Instale o agente leve do TracePilot</h3>
+{% endif %}
 
 <div class="code-box">
   <div class="code-box-header">
@@ -15,15 +28,20 @@ rede — nunca conteúdo de arquivo, senha ou comando digitado.</p>
   <textarea id="install-cmd-text" readonly rows="6">git clone https://github.com/Dyonnatan/TracePilot.git
 cd TracePilot/local-agent
 cargo build --release
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://SEU-COLETOR:4317
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://{{ otlp_endpoint }}
 export OTEL_SERVICE_NAME=tracepilot-local-agent
 ./target/release/tracepilot-agent</textarea>
 </div>
 
+{% if 'SEU-COLETOR' in otlp_endpoint %}
 <p class="muted small">Troque <code>SEU-COLETOR</code> pelo endereço do
 coletor OpenTelemetry do seu TracePilot. Pra esta demonstração, pode
 deixar <code>localhost</code> se o agente rodar na mesma máquina do
 coletor.</p>
+{% else %}
+<p class="muted small">O endereço do coletor (<code>{{ otlp_endpoint }}</code>) já está
+preenchido para esta demonstração: o agente roda na mesma máquina do coletor.</p>
+{% endif %}
 
 <p class="muted small">Não pode instalar nada nesse servidor? Também é
 possível a própria aplicação mandar os dados direto, sem instalar nada

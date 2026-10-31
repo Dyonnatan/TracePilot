@@ -10,11 +10,11 @@
   <form method="post" action="/login" class="form-stack">
     <label>
       Seu nome
-      <input type="text" name="name" placeholder="ex.: Dyonnatan" required autofocus>
+      <input type="text" name="name" value="{{ prefill_name }}" placeholder="ex.: Ana Souza" required autofocus>
     </label>
     <label>
       Seu e-mail
-      <input type="email" name="email" placeholder="ex.: voce@empresa.com" required>
+      <input type="email" name="email" value="{{ prefill_email }}" placeholder="ex.: voce@empresa.com" required>
     </label>
     <button type="submit">Entrar</button>
   </form>
