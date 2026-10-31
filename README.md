@@ -90,11 +90,14 @@ copie `.env.example` para `.env` e preencha.
 
 1. Implementar a lógica de cada agente (coleta + raciocínio) sobre o
    `orchestrator.py`.
-2. Avaliar com o benchmark aberto **OpenRCA**: LLM simples vs. agente único
+2. Construir o [ambiente de referência monitorado](docs/reference-environment.md)
+   (Docker, multi-serviço, com cenários de falha controlados) para dar
+   material realista às investigações.
+3. Avaliar com o benchmark aberto **OpenRCA**: LLM simples vs. agente único
    vs. multiagente, medindo acurácia, tempo, custo e fundamentação.
-3. Laboratório próprio: correlacionar ação do usuário → falha de backend →
+4. Laboratório próprio: correlacionar ação do usuário → falha de backend →
    relatório gerado.
-4. Memória vetorial de incidentes passados (ver gaps em
+5. Memória vetorial de incidentes passados (ver gaps em
    `docs/architecture.md`).
 
 ## Licença
