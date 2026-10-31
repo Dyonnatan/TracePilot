@@ -14,6 +14,7 @@ from typing import TypedDict
 from langgraph.graph import StateGraph, END
 
 from agents.llm import get_provider
+from agents.llm.decision_provider import DecisionProvider
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.specialists import logs_agent, metrics_agent, traces_agent
 from agents import diagnosis_agent, verifier_agent
@@ -36,6 +37,8 @@ class IncidentState(TypedDict, total=False):
     hypotheses: str
     verified: bool
     verification_notes: str
+    decision_model_confidence: float | None
+    decision_model_error: str
     report: str
 
 
@@ -53,6 +56,7 @@ def report_node(state: IncidentState) -> IncidentState:
 def build_graph() -> StateGraph:
     llm = get_provider()
     client = OpenObserveClient()
+    decision = DecisionProvider()
 
     graph = StateGraph(IncidentState)
 
@@ -61,7 +65,7 @@ def build_graph() -> StateGraph:
     graph.add_node("metrics_agent", lambda s: metrics_agent.run(s, llm, client))
     graph.add_node("traces_agent", lambda s: traces_agent.run(s, llm, client))
     graph.add_node("diagnosis_agent", lambda s: diagnosis_agent.run(s, llm))
-    graph.add_node("verifier_agent", lambda s: verifier_agent.run(s, llm))
+    graph.add_node("verifier_agent", lambda s: verifier_agent.run(s, llm, decision))
     graph.add_node("report", report_node)
 
     graph.set_entry_point("orchestrator")

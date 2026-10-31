@@ -6,6 +6,9 @@ langchain-core>=0.3
 openai>=1.50
 ollama>=0.3
 
+# Modelo de decisão tipada ("System 1") usado no verifier_agent
+laya>=0.1
+
 # Observabilidade
 opentelemetry-sdk>=1.27
 opentelemetry-exporter-otlp>=1.27

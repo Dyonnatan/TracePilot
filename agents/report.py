@@ -30,6 +30,7 @@ def build_report(state: dict) -> str:
         "",
         "## Verificação",
         state.get("verification_notes", "(não executada)"),
+        _decision_model_line(state),
         "",
         "## Limitações",
         (
@@ -39,3 +40,13 @@ def build_report(state: dict) -> str:
         ),
     ]
     return "\n".join(parts)
+
+
+def _decision_model_line(state: dict) -> str:
+    confidence = state.get("decision_model_confidence")
+    if confidence is not None:
+        return f"\n_Checagem independente (modelo de decisão Laya): {confidence:.0%} de confiança de que a hipótese está sustentada pela evidência._"
+    error = state.get("decision_model_error")
+    if error:
+        return f"\n_Checagem independente via modelo de decisão indisponível: {error}_"
+    return ""
