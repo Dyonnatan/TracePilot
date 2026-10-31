@@ -1,0 +1,49 @@
+{% extends "onboarding_base.html" %}
+{% block title %}Instalação — TracePilot{% endblock %}
+{% block step %}
+
+<h1>Instale o agente leve no servidor</h1>
+<p class="muted">O agente é um programa pequeno (~2MB) que roda no
+servidor que você quer monitorar. Ele só lê uso de CPU, memória, disco e
+rede — nunca conteúdo de arquivo, senha ou comando digitado.</p>
+
+<div class="code-box">
+  <div class="code-box-header">
+    <span>💻 Rode estes comandos no servidor a ser monitorado</span>
+    <button type="button" class="copy-btn" data-copy-target="install-cmd-text">Copiar</button>
+  </div>
+  <textarea id="install-cmd-text" readonly rows="6">git clone https://github.com/Dyonnatan/TracePilot.git
+cd TracePilot/local-agent
+cargo build --release
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://SEU-COLETOR:4317
+export OTEL_SERVICE_NAME=tracepilot-local-agent
+./target/release/tracepilot-agent</textarea>
+</div>
+
+<p class="muted small">Troque <code>SEU-COLETOR</code> pelo endereço do
+coletor OpenTelemetry do seu TracePilot. Pra esta demonstração, pode
+deixar <code>localhost</code> se o agente rodar na mesma máquina do
+coletor.</p>
+
+<p class="muted small">Não pode instalar nada nesse servidor? Também é
+possível a própria aplicação mandar os dados direto, sem instalar nada
+(ver a API de ingestão direta no repositório, pasta <code>ingest/</code>)
+— caminho alternativo, não coberto neste guia rápido.</p>
+
+<div class="wizard-actions">
+  <a href="/onboarding/repo" class="btn-lg">Já instalei (ou vou instalar depois) — Continuar →</a>
+</div>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.dataset.copyTarget);
+      await navigator.clipboard.writeText(target.value);
+      const original = btn.textContent;
+      btn.textContent = 'Copiado ✓';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+  });
+</script>
+
+{% endblock %}

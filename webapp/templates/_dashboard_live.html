@@ -1,0 +1,59 @@
+{% from "_diagram_macros.html" import architecture_diagram, resource_tiles, status_pill %}
+{% set ov = state.overall %}
+<section class="overall st-{{ ov.status }}" data-checked-at="{{ state.checked_at | int }}">
+  <div class="overall-icon" aria-hidden="true">{{ {'ok':'✓','warn':'!','down':'✕'}[ov.status] }}</div>
+  <div class="overall-text">
+    <h2>{{ ov.headline }}</h2>
+    <p>{{ ov.sub }}</p>
+  </div>
+  <div class="overall-counts">
+    <div class="count count-down"><strong>{{ state.problem_count }}</strong><span>problema{{ 's' if state.problem_count != 1 }} agora</span></div>
+    <div class="count count-warn"><strong>{{ state.risk_count }}</strong><span>ponto{{ 's' if state.risk_count != 1 }} de atenção</span></div>
+    <div class="count"><strong>{{ state.recent_errors if state.recent_errors is not none else '—' }}</strong><span>erros (15 min)</span></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>🗺️ Mapa do seu sistema</h2>
+    <span class="muted small">cada caixa é uma parte do sistema — clique para entender</span>
+  </div>
+  {{ architecture_diagram(state) }}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>📊 Recursos do servidor</h2>
+    <span class="muted small">toque no <b>?</b> para uma explicação simples</span>
+  </div>
+  {{ resource_tiles(state.resources) }}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>🔔 Alertas e recomendações</h2>
+  </div>
+  {% if state.alerts %}
+  <ul class="alert-list">
+    {% for a in state.alerts %}
+    <li class="alert-row lvl-{{ a.level }}">
+      <span class="alert-icon" aria-hidden="true">{{ {'down':'✕','warn':'!','info':'i'}[a.level] }}</span>
+      <div class="alert-body">
+        <div class="alert-kind">{{ {'down':'Problema agora','warn':'Pode virar problema','info':'Informação'}[a.level] }}</div>
+        <strong>{{ a.title }}</strong>
+        <p>{{ a.plain }}</p>
+        <p class="alert-action"><b>O que fazer:</b> {{ a.action }}</p>
+      </div>
+      <div class="alert-ctas">
+        <button type="button" class="btn-ghost btn-sm" data-focus-node="{{ a.node }}">Ver no mapa</button>
+        {% if a.investigate %}
+        <a href="#investigar" class="btn btn-sm" data-prefill="{{ a.title }} — o que está causando isso?">Investigar com IA</a>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">✓ Nenhum alerta. Quando algo sair do normal — ou estiver perto de sair — aparece aqui, com o que fazer.</p>
+  {% endif %}
+</section>

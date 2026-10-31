@@ -1,0 +1,41 @@
+{% extends "onboarding_base.html" %}
+{% block title %}Bem-vindo — TracePilot{% endblock %}
+{% block step %}
+
+<h1>Bem-vindo, {{ user.name }} 👋</h1>
+<p class="muted">Antes do painel, uma configuração rápida — leva poucos minutos.
+Isto é o que o TracePilot faz, em 4 passos:</p>
+
+<div class="tour-grid">
+  <div class="tour-card">
+    <span class="tour-icon">📝</span>
+    <h3>1. Você conta sobre seu sistema</h3>
+    <p>Nome, objetivo, como foi feito, onde roda. Isso ajuda o TracePilot a
+    entender o contexto antes de qualquer coisa.</p>
+  </div>
+  <div class="tour-card">
+    <span class="tour-icon">📦</span>
+    <h3>2. Instala um agente leve</h3>
+    <p>Um programinha pequeno (não é obrigatório, mas recomendado) que
+    coleta uso de CPU, memória, disco e rede do servidor — nada de
+    conteúdo de arquivo ou senha.</p>
+  </div>
+  <div class="tour-card">
+    <span class="tour-icon">👀</span>
+    <h3>3. O TracePilot observa continuamente</h3>
+    <p>Logs, métricas e rastros de requisição vão sendo coletados em
+    segundo plano, o tempo todo.</p>
+  </div>
+  <div class="tour-card">
+    <span class="tour-icon">🤖</span>
+    <h3>4. Quando algo quebra, agentes de IA investigam</h3>
+    <p>Em vez de um erro técnico confuso, você recebe uma causa provável e
+    o que fazer — em português simples.</p>
+  </div>
+</div>
+
+<div class="wizard-actions">
+  <a href="/onboarding/about" class="btn-lg">Vamos começar →</a>
+</div>
+
+{% endblock %}

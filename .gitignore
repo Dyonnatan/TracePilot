@@ -19,3 +19,6 @@ reports/*
 
 # Docker
 *.log
+
+# Estado do workspace (perfil/onboarding) gerado em runtime
+workspace/

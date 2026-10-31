@@ -1,0 +1,92 @@
+{% extends "onboarding_base.html" %}
+{% from "_diagram_macros.html" import architecture_diagram, status_pill %}
+{% block title %}Resumo — TracePilot{% endblock %}
+{% block step %}
+{% set res = {} %}
+{% for r in state.resources %}{% set _ = res.update({r.key: r}) %}{% endfor %}
+
+<h1>Tudo pronto, {{ user.name }} 🎉</h1>
+<p class="muted">Este é o retrato do <b>{{ profile.system_name or 'seu sistema' }}</b> que o
+TracePilot montou. A partir de agora ele é acompanhado continuamente — e você pode
+ajustar qualquer coisa depois.</p>
+
+<div class="summary-grid">
+  <section class="summary-card">
+    <h3>📝 Sobre o sistema</h3>
+    <ul class="checklist">
+      <li class="ck-ok">Nome: <strong>{{ profile.system_name or 'não informado' }}</strong></li>
+      {% if profile.objective %}<li class="ck-ok">Objetivo: <span class="muted">{{ profile.objective | truncate(120) }}</span></li>{% endif %}
+      <li class="ck-ok">Como foi feito: <strong>{{ dev_method_label }}{% if profile.dev_method_tool %} ({{ profile.dev_method_tool }}){% endif %}</strong></li>
+      <li class="ck-ok">Situação: <strong>{{ environment_label }}</strong></li>
+    </ul>
+  </section>
+
+  <section class="summary-card">
+    <h3>🔌 Conexões</h3>
+    <ul class="checklist">
+      <li class="{{ 'ck-ok' if state.nodes.webapp.status != 'down' else 'ck-warn' }}">Sistema monitorado: <strong>{{ 'respondendo' if state.nodes.webapp.status != 'down' else 'não respondeu' }}</strong></li>
+      <li class="{{ 'ck-ok' if state.nodes.tracepilot.status == 'ok' else 'ck-warn' }}">Armazenamento de dados: <strong>{{ 'conectado' if state.nodes.tracepilot.status == 'ok' else 'indisponível' }}</strong></li>
+      <li class="{{ 'ck-ok' if state.agent_reporting else 'ck-skip' }}">Agente local: <strong>{{ 'enviando dados' if state.agent_reporting else 'ainda não conectado' }}</strong>{% if not state.agent_reporting %} <span class="muted">— usando medição do host do painel por enquanto</span>{% endif %}</li>
+      {% if repo_info and repo_info.analyzed %}
+      <li class="ck-ok">Repositório: <strong>{{ repo_info.owner }}/{{ repo_info.name }}</strong></li>
+      {% elif profile.repo_url %}
+      <li class="ck-warn">Repositório informado, mas não analisado <span class="muted">— {{ {'not_github': 'por enquanto só analisamos links do GitHub', 'not_found': 'repositório privado ou não encontrado (para repositório privado, configure GITHUB_TOKEN)'}.get(repo_info.reason if repo_info else '', 'o GitHub não respondeu agora') }}</span></li>
+      {% else %}
+      <li class="ck-skip">Repositório: <strong>não informado</strong> <span class="muted">— opcional</span></li>
+      {% endif %}
+    </ul>
+  </section>
+
+  <section class="summary-card">
+    <h3>🧱 Servidor identificado</h3>
+    <ul class="checklist">
+      <li class="ck-ok">Máquina: <strong>{{ state.nodes.infra.subtitle }}</strong></li>
+      {% for key in ['cpu', 'memory', 'disk', 'gpu'] %}{% set r = res[key] %}
+      <li class="ck-{{ {'ok':'ok','warn':'warn','down':'warn'}.get(r.status, 'skip') }}">{{ r.label }}: <strong>{{ r.display }}</strong>{% if r.detail %} <span class="muted">· {{ r.detail }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="summary-card">
+    <h3>🧪 Tecnologias identificadas</h3>
+    {% if state.tech %}
+    <div class="tech-bar" role="img" aria-label="Linguagens do repositório: {% for t in state.tech %}{{ t.name }} {{ t.percent | round | int }}%{{ ', ' if not loop.last }}{% endfor %}">
+      {% for t in state.tech %}<span class="tech-seg tech-c{{ loop.index0 }}" style="width: {{ t.percent }}%" title="{{ t.name }}: {{ t.percent | round(1) }}%"></span>{% endfor %}
+    </div>
+    <ul class="tech-legend">
+      {% for t in state.tech %}<li><span class="tech-swatch tech-c{{ loop.index0 }}"></span>{{ t.name }} <span class="muted">{{ '<1' if t.percent < 1 else (t.percent | round | int) }}%</span></li>{% endfor %}
+    </ul>
+    {% else %}
+    <ul class="checklist">
+      {% if profile.dev_method_tool %}<li class="ck-ok">Ferramenta usada: <strong>{{ profile.dev_method_tool }}</strong> <span class="muted">(informado por você)</span></li>{% endif %}
+      <li class="ck-skip">Sem repositório analisado — informe um link do GitHub para o TracePilot identificar as linguagens e tecnologias automaticamente.</li>
+    </ul>
+    {% endif %}
+  </section>
+</div>
+
+<h3 class="summary-section-title">🗺️ Mapa da arquitetura</h3>
+<p class="muted small">Clique em cada parte para entender o que ela é e como está agora.</p>
+{{ architecture_diagram(state) }}
+
+{% if state.alerts %}
+<h3 class="summary-section-title">🔔 Já encontramos {{ state.alerts | length }} ponto{{ 's' if state.alerts | length != 1 }} para você saber</h3>
+<ul class="alert-list compact">
+  {% for a in state.alerts %}
+  <li class="alert-row lvl-{{ a.level }}">
+    <span class="alert-icon" aria-hidden="true">{{ {'down':'✕','warn':'!','info':'i'}[a.level] }}</span>
+    <div class="alert-body"><strong>{{ a.title }}</strong><p>{{ a.plain }}</p></div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div class="wizard-actions">
+  <form method="post" action="/onboarding/complete">
+    <button type="submit" class="btn-lg">Ir para o painel →</button>
+  </form>
+  <a href="/onboarding/about" class="btn-ghost">← Revisar respostas</a>
+</div>
+
+<script src="/static/app.js"></script>
+{% endblock %}

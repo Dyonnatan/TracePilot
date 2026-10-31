@@ -1,0 +1,24 @@
+{% extends "onboarding_base.html" %}
+{% block title %}Repositório — TracePilot{% endblock %}
+{% block step %}
+
+<h1>Link do repositório (opcional)</h1>
+<p class="muted">Se o código do seu sistema estiver num repositório
+público do GitHub, cole o link abaixo. O TracePilot vai identificar
+automaticamente as tecnologias usadas e já deixar isso pronto na
+arquitetura detectada — sem precisar explicar nada técnico.</p>
+
+<form method="post" action="/onboarding/repo" class="form-stack">
+  <label>
+    Link do repositório
+    <input type="url" name="repo_url" value="{{ profile.repo_url or '' }}" placeholder="https://github.com/sua-conta/seu-repositorio">
+  </label>
+  <p class="muted small">Não tem repositório público, ou não quer
+  compartilhar? Sem problema — deixe em branco e continue.</p>
+
+  <div class="wizard-actions">
+    <button type="submit">Continuar →</button>
+  </div>
+</form>
+
+{% endblock %}

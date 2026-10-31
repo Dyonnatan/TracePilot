@@ -19,11 +19,25 @@ disparar investigações e aprofundar na evidência.
 
 | Rota | O que faz |
 |---|---|
-| `GET /` | Painel: status da app monitorada + do OpenObserve, formulário pra disparar investigação, lista das investigações já feitas. |
+| `GET /` | Landing page pública sobre o produto (com botão de login). O hero reaproveita o diagrama do painel com dados **ilustrativos** (`monitoring.example_state()`), nunca dado real. |
+| `GET/POST /login`, `POST /logout` | Login simplificado de demo (nome + e-mail em cookie, sem senha). Primeiro acesso → `/onboarding`; depois → `/dashboard`. |
+| `/onboarding/*` | Jornada de primeiro acesso em 7 passos: boas-vindas → questionário (nome, objetivo, como foi feito, onde roda) → instalação do agente → repositório (opcional, GitHub) → checagem de conexão → "configurando" (identificação animada da máquina, recursos, tecnologias) → resumo com checklists, tecnologias e diagrama. Estado em `workspace/profile.json` (`agents/workspace_store.py`). `POST /onboarding/reset` volta a jornada pro início (pra demonstrar de novo). |
+| `GET /dashboard` | Painel: status geral em linguagem simples, **mapa interativo** (usuários → site → banco, dentro do servidor, observado pelo TracePilot; cada nó com ícone de alerta), indicadores de CPU/RAM/disco/rede/GPU com tendência e "?" explicativo, alertas ("problema agora" × "pode virar problema") com o que fazer, formulário de investigação e histórico. |
+| `GET /dashboard/live` | Só o miolo que muda (HTML parcial) — o `static/app.js` troca a cada 10s enquanto a aba está visível. `GET /api/dashboard` devolve o mesmo estado em JSON. |
 | `POST /investigations` | Dispara `run_investigation()` numa thread em background (não bloqueia a requisição) e redireciona pro detalhe. |
 | `GET /investigations/{id}` | Detalhe: se `running`, faz polling via JS a cada 3s até terminar; se `done`, mostra primeiro um **card de decisão** (causa em linguagem simples + ações + prompt de correção com botão de copiar) — o resto (hipóteses técnicas, verificação, evidência bruta, relatório completo) fica dentro de um `<details>` fechado por padrão, pra não competir visualmente com o que importa decidir em segundos. |
 | `GET /api/investigations/{id}` | JSON usado pelo polling da página de detalhe. |
 | `GET /api/health` | Status da app monitorada + streams do OpenObserve, em JSON. |
+
+**`webapp/monitoring.py`** traduz sinais técnicos em estado de tela:
+dois limites por recurso (atenção → "pode virar problema"; crítico →
+"problema agora"), erros recentes do sistema monitorado (contagem de logs
+ERROR nos últimos 15 min no OpenObserve), e textos simples de "o que é
+isso?" / "o que fazer". Sem dado → `unknown` (cinza), nunca "tudo bem".
+O banco de dados aparece sempre como "sem dados": o TracePilot não se
+conecta a ele nesta versão. Quando o agente Rust não reporta,
+`resource_snapshot.py` mede CPU/RAM/rede (`/proc`) e GPU (`nvidia-smi`)
+do host do **painel**, sempre marcado como `source="local"` na tela.
 
 Decisão de design: thread em background (não fila/worker) — MVP de
 hackathon, uma investigação por vez é suficiente, evita a complexidade

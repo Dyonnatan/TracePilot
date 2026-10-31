@@ -1,0 +1,27 @@
+{% extends "base_marketing.html" %}
+{% block title %}Entrar — TracePilot{% endblock %}
+{% block content %}
+
+<section class="login-card">
+  <h1>Entrar no TracePilot</h1>
+  <p class="muted">Identifique-se para continuar. Isto é uma demonstração —
+  não há senha, o acesso é só para identificar esta sessão.</p>
+
+  <form method="post" action="/login" class="form-stack">
+    <label>
+      Seu nome
+      <input type="text" name="name" placeholder="ex.: Dyonnatan" required autofocus>
+    </label>
+    <label>
+      Seu e-mail
+      <input type="email" name="email" placeholder="ex.: voce@empresa.com" required>
+    </label>
+    <button type="submit">Entrar</button>
+  </form>
+
+  <p class="login-disclaimer">🔒 Login simplificado de demonstração — sem
+  cadastro de senha. Em uma versão real, isto seria substituído por
+  autenticação de verdade.</p>
+</section>
+
+{% endblock %}

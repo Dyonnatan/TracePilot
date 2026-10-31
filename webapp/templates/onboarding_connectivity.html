@@ -1,0 +1,41 @@
+{% extends "onboarding_base.html" %}
+{% block title %}Conexão — TracePilot{% endblock %}
+{% block step %}
+
+<h1>Vamos checar se está tudo conectado</h1>
+<p class="muted">Nada aqui bloqueia você de continuar — mesmo que algo
+esteja desligado agora, você pode seguir e ajustar depois.</p>
+
+<div class="check-list">
+  <div class="status-card {{ 'ok' if demo_app.up else 'down' }}">
+    <span class="dot"></span>
+    <div>
+      <strong>Sistema monitorado está no ar?</strong>
+      <div class="muted">{{ demo_app.url }} — {{ 'respondendo' if demo_app.up else 'não respondeu' }}</div>
+    </div>
+  </div>
+  <div class="status-card {{ 'ok' if openobserve.up else 'down' }}">
+    <span class="dot"></span>
+    <div>
+      <strong>Armazenamento de telemetria está no ar?</strong>
+      <div class="muted">{{ 'conectado' if openobserve.up else 'indisponível' }} — é onde logs/métricas/traces ficam guardados.</div>
+    </div>
+  </div>
+  <div class="status-card {{ 'ok' if agent_reporting else 'down' }}">
+    <span class="dot"></span>
+    <div>
+      <strong>Agente local já está mandando dados?</strong>
+      <div class="muted">
+        {% if agent_reporting %}sim, dados chegando normalmente.
+        {% else %}ainda não — normal se você acabou de instalar, pode levar alguns segundos.{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wizard-actions">
+  <a href="/onboarding/connectivity" class="btn-ghost">↻ Verificar de novo</a>
+  <a href="/onboarding/configuring" class="btn-lg">Continuar mesmo assim →</a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,190 @@
+{#
+  Diagrama de arquitetura interativo — usado no resumo do onboarding, no
+  painel e (com dados ilustrativos) na landing page.
+
+  Recebe o `state` montado por `webapp/monitoring.py`. Cada nó é um botão
+  (clique/Enter) que abre o painel de detalhe correspondente logo abaixo;
+  o comportamento fica em /static/app.js (delegação de eventos, então
+  continua funcionando depois que o painel troca o HTML ao vivo).
+#}
+
+{% macro status_pill(status, text) -%}
+<span class="status-pill st-{{ status }}"><span class="status-pill-icon" aria-hidden="true">{{ {'ok':'✓','warn':'!','down':'✕'}.get(status, '?') }}</span>{{ text }}</span>
+{%- endmacro %}
+
+{% macro _badge(x, y, node) %}
+  {% if node.status in ('warn', 'down') %}
+  <circle cx="{{ x }}" cy="{{ y }}" r="13" class="dg-pulse"></circle>
+  {% endif %}
+  <circle cx="{{ x }}" cy="{{ y }}" r="12" class="dg-badge"></circle>
+  <text x="{{ x }}" y="{{ y + 4.5 }}" text-anchor="middle" class="dg-badge-icon">{{ node.status_icon }}</text>
+{% endmacro %}
+
+{% macro architecture_diagram(state, interactive=True, show_panels=True, selected=None) %}
+{% set n = state.nodes %}
+{% set res = state.resources %}
+{% if selected is none %}
+  {% set ns = namespace(sel='') %}
+  {% for key in ['webapp', 'infra', 'tracepilot', 'database', 'users'] %}
+    {% if not ns.sel and n[key].status == 'down' %}{% set ns.sel = key %}{% endif %}
+  {% endfor %}
+  {% for key in ['webapp', 'infra', 'tracepilot', 'database', 'users'] %}
+    {% if not ns.sel and n[key].status == 'warn' %}{% set ns.sel = key %}{% endif %}
+  {% endfor %}
+  {% set selected = ns.sel %}
+{% endif %}
+<div class="arch" data-arch data-default-selected="{{ selected }}">
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 800 390" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Mapa do sistema: usuários acessam o site, que usa o banco de dados, tudo rodando no servidor, observado pelo TracePilot">
+      <defs>
+        <marker id="dg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="dg-arrowhead"></path>
+        </marker>
+      </defs>
+
+      {# ---- Conexões (atrás dos nós) ---- #}
+      <path d="M146,195 C190,195 190,125 228,125" class="dg-link" marker-end="url(#dg-arrow)"></path>
+      <path d="M146,195 C190,195 190,125 228,125" class="dg-flow {{ 'is-stopped' if n.webapp.status == 'down' }}"></path>
+      <text x="172" y="232" class="dg-link-label" text-anchor="middle">acessam</text>
+
+      <line x1="400" y1="125" x2="428" y2="125" class="dg-link" marker-end="url(#dg-arrow)"></line>
+      <line x1="400" y1="125" x2="428" y2="125" class="dg-flow {{ 'is-stopped' if n.webapp.status == 'down' }}"></line>
+
+      <line x1="622" y1="195" x2="664" y2="195" class="dg-link dg-link-observe" marker-end="url(#dg-arrow)"></line>
+      <text x="643" y="232" class="dg-link-label" text-anchor="middle">observa</text>
+
+      {# ---- Servidor (infra envolvendo tudo) ---- #}
+      <g class="dg-node dg-infra st-{{ n.infra.status }}" data-node="infra" {% if interactive %}tabindex="0" role="button" aria-label="Servidor: {{ n.infra.status_text }}. Abrir detalhes"{% endif %}>
+        <rect x="200" y="22" width="422" height="350" rx="18" class="dg-infra-box"></rect>
+        <text x="222" y="50" class="dg-title">🧱 Servidor</text>
+        <text x="222" y="68" class="dg-sub">{{ (n.infra.subtitle or '') | truncate(34, True, '…') }}</text>
+        <text x="572" y="50" text-anchor="end" class="dg-status-text">{{ n.infra.status_text }}</text>
+        {{ _badge(600, 45, n.infra) }}
+      </g>
+
+      {# ---- Site / Aplicação ---- #}
+      <g class="dg-node st-{{ n.webapp.status }}" data-node="webapp" {% if interactive %}tabindex="0" role="button" aria-label="Site / Aplicação: {{ n.webapp.status_text }}. Abrir detalhes"{% endif %}>
+        <rect x="228" y="82" width="172" height="90" rx="12" class="dg-box"></rect>
+        <text x="244" y="110" class="dg-title">🖥️ Site / App</text>
+        <text x="244" y="130" class="dg-sub">{{ (n.webapp.subtitle or '') | truncate(22, True, '…') }}</text>
+        <text x="244" y="155" class="dg-status-text">{{ n.webapp.status_text }}</text>
+        {{ _badge(396, 86, n.webapp) }}
+      </g>
+
+      {# ---- Banco de dados ---- #}
+      <g class="dg-node st-{{ n.database.status }}" data-node="database" {% if interactive %}tabindex="0" role="button" aria-label="Banco de dados: {{ n.database.status_text }}. Abrir detalhes"{% endif %}>
+        <rect x="428" y="82" width="170" height="90" rx="12" class="dg-box"></rect>
+        <text x="444" y="110" class="dg-title">🗄️ Banco de dados</text>
+        <text x="444" y="130" class="dg-sub">cadastros, pedidos…</text>
+        <text x="444" y="155" class="dg-status-text">{{ n.database.status_text }}</text>
+        {{ _badge(594, 86, n.database) }}
+      </g>
+
+      {# ---- Recursos do servidor (chips) ---- #}
+      <text x="228" y="206" class="dg-section-label">RECURSOS DA MÁQUINA</text>
+      {% for r in res %}
+      {% set cx = 228 + loop.index0 * 75 %}
+      <g class="dg-node dg-chip st-{{ r.status }}" data-node="infra" data-resource="{{ r.key }}" {% if interactive %}tabindex="0" role="button" aria-label="{{ r.label }}: {{ r.display }}"{% endif %}>
+        <rect x="{{ cx }}" y="216" width="67" height="134" rx="10" class="dg-box"></rect>
+        <text x="{{ cx + 33.5 }}" y="244" text-anchor="middle" class="dg-chip-icon">{{ r.icon }}</text>
+        <text x="{{ cx + 33.5 }}" y="266" text-anchor="middle" class="dg-chip-label">{{ {'cpu':'CPU','memory':'RAM','disk':'Disco','network':'Rede','gpu':'GPU'}[r.key] }}</text>
+        <text x="{{ cx + 33.5 }}" y="292" text-anchor="middle" class="dg-chip-value">{{ r.display if r.key != 'network' else (r.display | replace('/s','')) }}</text>
+        {% if r.percent is not none %}
+          <rect x="{{ cx + 10 }}" y="312" width="47" height="6" rx="3" class="dg-meter-track"></rect>
+          <rect x="{{ cx + 10 }}" y="312" width="{{ [r.percent, 2] | max * 0.47 }}" height="6" rx="3" class="dg-meter-fill"></rect>
+        {% elif r.key == 'network' and r.percent is none and r.display != '—' %}
+          <text x="{{ cx + 33.5 }}" y="318" text-anchor="middle" class="dg-sub">por segundo</text>
+        {% endif %}
+        <text x="{{ cx + 33.5 }}" y="338" text-anchor="middle" class="dg-chip-status">{{ {'ok':'✓ ok','warn':'! atenção','down':'✕ crítico'}.get(r.status, '? sem dado') }}</text>
+      </g>
+      {% endfor %}
+
+      {# ---- Usuários ---- #}
+      <g class="dg-node st-{{ n.users.status }}" data-node="users" {% if interactive %}tabindex="0" role="button" aria-label="Usuários: {{ n.users.status_text }}. Abrir detalhes"{% endif %}>
+        <rect x="10" y="150" width="136" height="90" rx="12" class="dg-box"></rect>
+        <text x="24" y="178" class="dg-title">👥 Usuários</text>
+        <text x="24" y="198" class="dg-sub">quem usa o sistema</text>
+        <text x="24" y="222" class="dg-status-text">{{ n.users.status_text }}</text>
+        {{ _badge(142, 154, n.users) }}
+      </g>
+
+      {# ---- TracePilot ---- #}
+      <g class="dg-node st-{{ n.tracepilot.status }}" data-node="tracepilot" {% if interactive %}tabindex="0" role="button" aria-label="TracePilot: {{ n.tracepilot.status_text }}. Abrir detalhes"{% endif %}>
+        <rect x="664" y="150" width="126" height="90" rx="12" class="dg-box dg-box-accent"></rect>
+        <text x="676" y="178" class="dg-title">🛰️ TracePilot</text>
+        <text x="676" y="198" class="dg-sub">guarda e investiga</text>
+        <text x="676" y="222" class="dg-status-text">{{ n.tracepilot.status_text }}</text>
+        {{ _badge(786, 154, n.tracepilot) }}
+      </g>
+    </svg>
+  </div>
+
+  <div class="dg-legend" aria-hidden="true">
+    {{ status_pill('ok', 'funcionando') }}
+    {{ status_pill('warn', 'atenção: pode virar problema') }}
+    {{ status_pill('down', 'problema agora') }}
+    {{ status_pill('unknown', 'sem dados') }}
+  </div>
+
+  {% if show_panels %}
+  <div class="node-panels">
+    <p class="node-hint {{ 'hidden' if selected }}" data-node-hint>👆 Clique em qualquer item do mapa para ver o que ele é e como está.</p>
+    {% for key in ['users', 'webapp', 'database', 'infra', 'tracepilot'] %}
+    {% set node = n[key] %}
+    <section class="node-panel st-{{ node.status }}" data-panel="{{ key }}" {{ '' if key == selected else 'hidden' }}>
+      <header class="node-panel-head">
+        <h3>{{ node.icon }} {{ node.title }}{% if node.subtitle %} <span class="muted">— {{ node.subtitle }}</span>{% endif %}</h3>
+        {{ status_pill(node.status, node.status_text) }}
+      </header>
+      <p class="node-what"><strong>O que é isso?</strong> {{ node.what }}</p>
+      <ul class="node-facts">
+        {% for f in node.facts %}<li>{{ f }}</li>{% endfor %}
+      </ul>
+      {% for a in state.alerts if a.node == key %}
+      <div class="node-alert lvl-{{ a.level }}">
+        <strong>{{ {'down':'✕','warn':'!','info':'i'}[a.level] }} {{ a.title }}</strong>
+        <p>{{ a.plain }}</p>
+        <p class="node-alert-action"><strong>O que fazer:</strong> {{ a.action }}</p>
+      </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro resource_tiles(resources) %}
+<div class="tiles">
+  {% for r in resources %}
+  <article class="tile st-{{ r.status }}" data-tile="{{ r.key }}">
+    <header class="tile-head">
+      <span class="tile-label">{{ r.icon }} {{ r.label }}</span>
+      <button type="button" class="help-btn" data-help="{{ r.key }}" aria-expanded="false" aria-label="O que é {{ r.label }}?">?</button>
+    </header>
+    <div class="tile-value">{{ r.display }}</div>
+    {% if r.percent is not none %}
+    <div class="meter" role="img" aria-label="{{ r.label }} em {{ r.display }}; atenção a partir de {{ r.thresholds[0] }}%">
+      <div class="meter-fill" style="width: {{ [r.percent, 100] | min }}%"></div>
+      <div class="meter-mark" style="left: {{ r.thresholds[0] }}%" title="limite de atenção ({{ r.thresholds[0] }}%)"></div>
+    </div>
+    {% endif %}
+    <div class="tile-detail">{{ r.detail }}</div>
+    {% if r.history | length > 1 %}
+    {% set hmax = [r.history | max, (100 if r.percent is not none else 0.0001)] | max %}
+    {% set step = 100 / (r.history | length - 1) %}
+    <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" data-values="{{ r.history | map('round', 1) | join(',') }}" data-unit="{{ '%' if r.percent is not none else 'B/s' }}" aria-label="Tendência das últimas {{ r.history | length }} leituras">
+      <polyline points="{% for v in r.history %}{{ (loop.index0 * step) | round(2) }},{{ (28 - v / hmax * 26) | round(2) }} {% endfor %}" class="spark-line"></polyline>
+    </svg>
+    {% else %}
+    <div class="spark-empty">tendência aparece após algumas leituras</div>
+    {% endif %}
+    <footer class="tile-foot">
+      {{ status_pill(r.status, {'ok':'normal','warn':'atenção','down':'crítico'}.get(r.status, 'sem dado')) }}
+      <span class="tile-source">{{ r.source_text }}</span>
+    </footer>
+    <p class="tile-help" data-help-text="{{ r.key }}" hidden>{{ r.explain }}{% if r.thresholds %} <br><strong>Quando se preocupar:</strong> acima de {{ r.thresholds[0] }}% vale ficar de olho; acima de {{ r.thresholds[1] }}% começam as falhas.{% endif %}</p>
+  </article>
+  {% endfor %}
+</div>
+{% endmacro %}

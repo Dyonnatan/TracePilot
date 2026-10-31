@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TracePilot{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="marketing">
+  {% set user = current_user(request) %}
+  <header class="topbar marketing-topbar">
+    <a href="/" class="brand">🛰️ TracePilot</a>
+    <nav class="marketing-nav">
+      <a href="/#como-funciona" class="nav-text-link">Como funciona</a>
+      {% if user %}
+      <a href="/dashboard" class="nav-login-link">Ir para o painel →</a>
+      {% else %}
+      <a href="/login" class="nav-login-link">Entrar</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main class="marketing-main">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="marketing-footer">
+    🛰️ TracePilot — protótipo de hackathon · monitoramento com investigação por agentes de IA
+  </footer>
+</body>
+</html>

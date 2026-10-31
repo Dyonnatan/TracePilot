@@ -1,0 +1,60 @@
+{% extends "onboarding_base.html" %}
+{% block title %}Sobre o sistema — TracePilot{% endblock %}
+{% block step %}
+
+<h1>Sobre o sistema que você quer monitorar</h1>
+<p class="muted">Isso ajuda o TracePilot a entender o contexto certo antes
+de investigar qualquer problema. Nada aqui é obrigatório ficar perfeito —
+dá pra editar depois.</p>
+
+<form method="post" action="/onboarding/about" class="form-stack">
+  <label>
+    Nome do sistema
+    <input type="text" name="system_name" value="{{ profile.system_name or '' }}" placeholder="ex.: Loja da Ana, Sistema de Agendamento..." required>
+  </label>
+
+  <label>
+    O que ele faz? (objetivo e funcionamento, em poucas linhas)
+    <textarea name="objective" placeholder="ex.: é uma loja online onde clientes fazem pedidos e pagam; o backend calcula o preço e salva o pedido no banco.">{{ profile.objective or '' }}</textarea>
+  </label>
+
+  <label>
+    Como ele foi construído?
+    <select name="dev_method">
+      <option value="ai_assisted" {{ 'selected' if profile.dev_method == 'ai_assisted' }}>Vibe coding / com ajuda de IA</option>
+      <option value="no_code" {{ 'selected' if profile.dev_method == 'no_code' }}>Plataforma no-code / low-code</option>
+      <option value="traditional" {{ 'selected' if profile.dev_method == 'traditional' }}>Desenvolvimento tradicional (código escrito à mão)</option>
+      <option value="other" {{ 'selected' if profile.dev_method == 'other' }}>Outro</option>
+    </select>
+  </label>
+
+  <label>
+    Qual ferramenta/IA/plataforma, especificamente? (opcional)
+    <input type="text" name="dev_method_tool" value="{{ profile.dev_method_tool or '' }}" placeholder="ex.: Claude Code, Cursor, v0, bolt.new, Replit, Django, framework próprio...">
+  </label>
+
+  <label>
+    Situação atual
+    <select name="environment">
+      <option value="not_deployed" {{ 'selected' if profile.environment == 'not_deployed' }}>Ainda não publiquei</option>
+      <option value="local_server" {{ 'selected' if profile.environment == 'local_server' }}>Servidor local (minha própria máquina)</option>
+      <option value="dedicated_server" {{ 'selected' if profile.environment == 'dedicated_server' }}>Servidor dedicado</option>
+      <option value="vps" {{ 'selected' if profile.environment == 'vps' }}>VPS (nuvem)</option>
+      <option value="production" {{ 'selected' if profile.environment == 'production' }}>Já em produção</option>
+    </select>
+  </label>
+  <p class="inline-note">💡 Para esta demonstração, vamos usar um servidor
+  de teste real: você mesmo vai instalar o agente leve do TracePilot nele
+  no próximo passo — não importa qual opção você escolheu acima.</p>
+
+  <label>
+    Mais algum detalhe sobre onde/como ele roda? (opcional)
+    <textarea name="environment_notes" placeholder="ex.: roda num container Docker, atrás de um Nginx...">{{ profile.environment_notes or '' }}</textarea>
+  </label>
+
+  <div class="wizard-actions">
+    <button type="submit">Continuar →</button>
+  </div>
+</form>
+
+{% endblock %}
