@@ -76,6 +76,7 @@ class OpenObserveClient:
     def query_logs(
         self,
         query_text: str | None = None,
+        severities: list[str] | None = None,
         start_time: str | int | None = None,
         end_time: str | int | None = None,
         service: str | None = None,
@@ -86,11 +87,27 @@ class OpenObserveClient:
         """Busca logs. Campos confirmados: `body` (mensagem), `severity`,
         `trace_id`, `span_id`, `service_name`, `exception_type`,
         `exception_message`, `exception_stacktrace`.
+
+        `query_text`, quando informado, busca em `body` OU `exception_type`
+        OU `exception_message` — não só na mensagem crua — porque um relato
+        de erro em linguagem natural (ex. "checkout falhando") raramente
+        aparece literal no corpo do log; já um termo técnico específico
+        (ex. "ZeroDivisionError") tende a bater em `exception_type`.
+        `severities` (ex. `["ERROR", "WARNING"]`) é o filtro mais confiável
+        para achar logs relevantes a um incidente sem depender de uma
+        palavra-chave exata — por isso é o que `logs_agent.py` usa por
+        padrão, em vez de `query_text`.
         """
         conditions = []
         if query_text:
-            escaped = query_text.replace("'", "''")
-            conditions.append(f"body ILIKE '%{escaped}%'")
+            escaped = _escape(query_text)
+            conditions.append(
+                f"(body ILIKE '%{escaped}%' OR exception_type ILIKE '%{escaped}%' "
+                f"OR exception_message ILIKE '%{escaped}%')"
+            )
+        if severities:
+            in_list = ", ".join(f"'{_escape(s)}'" for s in severities)
+            conditions.append(f"severity IN ({in_list})")
         if service:
             conditions.append(f"service_name = '{_escape(service)}'")
         if trace_id:

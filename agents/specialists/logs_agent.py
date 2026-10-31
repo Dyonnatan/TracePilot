@@ -19,8 +19,14 @@ severidade, exceções) e se há evidência suficiente para apontar uma causa.""
 
 
 def run(state: dict, llm: LLMProvider, client: OpenObserveClient) -> dict:
+    # Prioriza severidade (ERROR/WARNING) em vez de casar o relato em
+    # linguagem natural contra o corpo do log — um relato como "checkout
+    # falhando" dificilmente aparece literal na mensagem do log, enquanto
+    # severidade é um filtro confiável para achar o que é relevante a um
+    # incidente. trace_id (quando já conhecido) ainda restringe ao caso
+    # exato investigado.
     logs = client.query_logs(
-        query_text=state.get("error_report"),
+        severities=["ERROR", "WARNING", "WARN"],
         service=state.get("service"),
         trace_id=state.get("trace_id"),
         start_time=state.get("start_time"),
