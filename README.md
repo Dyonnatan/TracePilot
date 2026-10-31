@@ -31,7 +31,8 @@ mudar a hipótese e exigir checar outra fonte. Um agente **orquestrador**
 (padrão Supervisor-Trabalhador) coordena **especialistas** em logs,
 métricas e traces; um agente de **diagnóstico** consolida hipóteses; e um
 **verificador** questiona conclusões sem evidência suficiente. Mais
-detalhes em [docs/architecture.md](docs/architecture.md).
+detalhes em [docs/architecture.md](docs/architecture.md) e nomenclatura/
+fundamentação teórica em [docs/glossario-conceitos-ia.md](docs/glossario-conceitos-ia.md).
 
 ## Arquitetura (visão rápida)
 
@@ -56,20 +57,32 @@ Detalhe módulo a módulo em [docs/code-architecture.md](docs/code-architecture.
 ```
 TracePilot/
 ├── agents/            # orquestrador LangGraph + agentes especialistas + providers de LLM
+├── webapp/              # painel web (FastAPI) para monitorar e investigar
 ├── demo_app/           # ambiente de referência multi-serviço + cenários de falha (demo do pitch)
+├── local-agent/         # agente leve em Rust (recursos do SO), instalado na máquina monitorada
 ├── benchmark/          # notas de avaliação (OpenRCA)
-├── reports/             # relatórios de incidente gerados
-├── docs/                 # arquitetura geral e de código
+├── reports/             # investigações persistidas (JSON)
+├── docs/                 # arquitetura geral, de código e glossário de conceitos
 ├── docker-compose.yml    # OpenObserve + OTel Collector
 ├── docker-compose.hostmetrics.yml  # override opt-in: métricas de host e containers
 ├── otel-collector-config.yaml
 └── otel-collector-hostmetrics.yaml
 ```
 
-> Estágio atual: os agentes ainda são **scaffold** (interfaces definidas,
-> lógica de investigação não implementada; ver TODOs em
-> `docs/code-architecture.md`). O [ambiente de referência](demo_app/README.md)
-> já gera incidentes reais e telemetria correlacionada para eles investigarem.
+> O TracePilot é composto por dois sistemas: o **agente local**
+> ([`local-agent/`](local-agent/), Rust, baixo impacto — recursos do
+> sistema; FIM/auditoria de usuário ficam a cargo do Wazuh, ver
+> [docs/local-agent-architecture.md](docs/local-agent-architecture.md))
+> instalado na máquina monitorada, e o **servidor TracePilot** (este
+> repositório — processamento pesado dos agentes de IA).
+
+> Estágio atual: **MVP funcional com interface web**. O fluxo completo
+> (logs → métricas → traces → diagnóstico → verificação → relatório) roda
+> de ponta a ponta contra uma instância real do OpenObserve, com um
+> painel web pra disparar investigações e fazer drill-down na evidência.
+> O [ambiente de referência](demo_app/README.md) gera os incidentes e a
+> telemetria correlacionada que os agentes investigam. Detalhe do que está
+> implementado vs. pendente em `docs/code-architecture.md`.
 
 ## Como rodar localmente
 
@@ -81,10 +94,35 @@ docker compose up -d
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# 3. Subir o ambiente de referência (loja + painel de falhas), ver abaixo
+(cd demo_app && make up)
+
+# 4. Configurar o .env (backend de LLM local via Ollama, por padrão)
+cp .env.example .env
+ollama pull gemma3:4b
+
+# 5. Subir o painel web (outro terminal)
+uvicorn webapp.main:app --host 127.0.0.1 --port 8800
+# abra http://localhost:8800 — ligue um cenário no Chaos Control
+# (http://localhost:8090), reproduza na loja e dispare a investigação
+# direto pelo formulário
+
+# (alternativa: CLI, sem o painel; --service "" busca em todos os serviços)
+python3 agents/orchestrator.py "não consegui finalizar o pedido" \
+  --service shop-api
 ```
 
-Configurações (chaves de API, backend de LLM, endpoints) ficam em `.env` —
-copie `.env.example` para `.env` e preencha.
+> Ao reproduzir localmente em máquinas com pouca RAM: suba os serviços um
+> de cada vez (Docker → demo_app → painel) em vez de todos juntos — já
+> travou uma máquina com 19GB de RAM e pouco swap ao carregar Docker +
+> modelo local + Laya tudo de uma vez.
+
+Backend de LLM local via **Ollama** (`LLM_BACKEND=local` no `.env`,
+padrão). Comece com `gemma3:4b` (~3,4GB, roda numa GPU de 4GB como a
+GTX 1650) e troque só `OLLAMA_MODEL` pra testar outro. Também dá pra usar
+a **OpenRouter** (`LLM_BACKEND=cloud`) se preferir backend em nuvem — ver
+[openrouter.ai/models](https://openrouter.ai/models) e `.env.example`.
 
 ### Ambiente de referência (demo)
 
@@ -99,18 +137,21 @@ gabaritos em [demo_app/README.md](demo_app/README.md).
 
 ## Roadmap
 
-1. Implementar a lógica de cada agente (coleta + raciocínio) sobre o
-   `orchestrator.py`.
+1. Roteamento dinâmico no orquestrador (padrão Planejador-Executor — hoje
+   o fluxo é linear fixo, ver `docs/code-architecture.md`).
 2. ~~Construir o [ambiente de referência monitorado](docs/reference-environment.md)
    (Docker, multi-serviço, com cenários de falha controlados).~~ Primeira
-   versão em [demo_app/](demo_app/README.md): 4 cenários com
-   gabarito.
+   versão em [demo_app/](demo_app/README.md): 11 cenários com gabarito.
 3. Avaliar com o benchmark aberto **OpenRCA**: LLM simples vs. agente único
    vs. multiagente, medindo acurácia, tempo, custo e fundamentação.
 4. Laboratório próprio: correlacionar ação do usuário → falha de backend →
    relatório gerado.
 5. Memória vetorial de incidentes passados (ver gaps em
    `docs/architecture.md`).
+6. Agente local: empacotar `local-agent/` como instalador (MSI/pkg/deb) e
+   decidir, com atenção à privacidade, se/quando integrar o Wazuh para
+   FIM e auditoria de usuário — ver
+   [docs/local-agent-architecture.md](docs/local-agent-architecture.md).
 
 ## Licença
 

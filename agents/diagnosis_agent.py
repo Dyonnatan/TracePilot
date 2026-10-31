@@ -1,13 +1,41 @@
 from agents.llm import LLMProvider
 
+SYSTEM_PROMPT = (
+    "Você consolida evidências de logs, métricas e traces em hipóteses de "
+    "causa-raiz de um incidente de produção. Baseie-se SOMENTE nos resumos "
+    "fornecidos abaixo — nunca invente uma causa que não esteja sustentada "
+    "por eles. Se a evidência for insuficiente para qualquer hipótese "
+    "concreta, diga isso explicitamente em vez de forçar uma conclusão."
+)
+
+PROMPT_TEMPLATE = """Relato do erro investigado: {error_report}
+
+Resumo do especialista em logs:
+{logs_summary}
+
+Resumo do especialista em métricas:
+{metrics_summary}
+
+Resumo do especialista em traces:
+{traces_summary}
+
+Liste de 1 a 3 hipóteses de causa-raiz, da mais para a menos provável.
+Para cada uma, no formato:
+
+N. <hipótese> — confiança: <alta/média/baixa> — evidência: <qual resumo acima sustenta>
+
+Se não houver evidência suficiente para nenhuma hipótese, responda apenas:
+"SEM EVIDÊNCIA SUFICIENTE: <o que falta investigar>"."""
+
 
 def run(state: dict, llm: LLMProvider) -> dict:
-    """Consolida as evidências coletadas pelos agentes especialistas
-    (logs/métricas/traces) em uma ou mais hipóteses de causa-raiz,
-    com nível de confiança e evidências associadas.
-
-    TODO: implementar o raciocínio de consolidação de hipóteses e decidir
-    se evidências adicionais precisam ser solicitadas a um especialista
-    antes de seguir para o verifier_agent.
-    """
-    raise NotImplementedError("TODO: lógica do diagnosis_agent")
+    hypotheses = llm.generate(
+        prompt=PROMPT_TEMPLATE.format(
+            error_report=state.get("error_report", "(não informado)"),
+            logs_summary=state.get("logs_summary", "(não coletado)"),
+            metrics_summary=state.get("metrics_summary", "(não coletado)"),
+            traces_summary=state.get("traces_summary", "(não coletado)"),
+        ),
+        system=SYSTEM_PROMPT,
+    )
+    return {**state, "hypotheses": hypotheses}

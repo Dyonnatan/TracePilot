@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Investigação {{ investigation_id }} — TracePilot{% endblock %}
+{% block content %}
+
+<a href="/" class="back-link">← Painel</a>
+
+{% if not investigation %}
+  <section class="panel"><p>Investigação não encontrada.</p></section>
+
+{% elif investigation.status == 'running' %}
+  <section class="panel" id="poll-target" data-poll-url="/api/investigations/{{ investigation_id }}">
+    <h2>⏳ Investigando…</h2>
+    <p class="muted">{{ investigation.error_report }}</p>
+    <p class="muted">Isso pode levar de alguns segundos a poucos minutos, dependendo do modelo configurado. A página atualiza sozinha.</p>
+  </section>
+
+{% elif investigation.status == 'error' %}
+  <section class="panel">
+    <h2>❌ Erro na investigação</h2>
+    <p class="muted">{{ investigation.error_report }}</p>
+    <pre class="error-box">{{ investigation.error }}</pre>
+  </section>
+
+{% else %}
+
+  {# ---- Resumo de decisão: o que a pessoa vê primeiro, em segundos ---- #}
+  <section class="decision-card {{ 'ok' if investigation.verified else 'warn' }}">
+    <div class="decision-status">
+      {% if investigation.verified %}✅ Causa encontrada{% else %}⚠️ Ainda não temos certeza{% endif %}
+    </div>
+    <p class="decision-cause">{{ investigation.plain_cause }}</p>
+
+    {% if investigation.plain_actions %}
+    <div class="decision-actions">
+      <span class="decision-actions-label">O que fazer agora:</span>
+      <ul>
+        {% for action in investigation.plain_actions %}
+        <li>{{ action }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if investigation.fix_prompt %}
+    <div class="fix-prompt-box">
+      <div class="fix-prompt-header">
+        <span>📋 Prompt pronto para colar na IA que vai corrigir</span>
+        <button type="button" class="copy-btn" data-copy-target="fix-prompt-text">Copiar</button>
+      </div>
+      <textarea id="fix-prompt-text" readonly>{{ investigation.fix_prompt }}</textarea>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ---- Detalhe técnico: fica fechado, só quem quiser aprofunda ---- #}
+  <details class="panel tech-details">
+    <summary>🔍 Ver detalhes técnicos completos</summary>
+
+    <h3>Causa provável (diagnóstico técnico)</h3>
+    <pre class="text-block">{{ investigation.hypotheses }}</pre>
+
+    <h3>Verificação</h3>
+    <pre class="text-block">{{ investigation.verification_notes }}</pre>
+    {% if investigation.decision_model_confidence is not none %}
+      <p class="muted">Checagem independente (Laya): {{ "%.0f"|format(investigation.decision_model_confidence * 100) }}% de confiança.</p>
+    {% endif %}
+
+    <h3>Evidência bruta</h3>
+    <details open>
+      <summary>📋 Logs — {{ investigation.evidence_logs | length }} registro(s)</summary>
+      <p class="text-block">{{ investigation.logs_summary }}</p>
+      {% for log in investigation.evidence_logs %}
+      <div class="evidence-item">
+        <span class="sev sev-{{ log.severity | lower }}">{{ log.severity }}</span>
+        {{ log.body }}
+        {% if log.exception_type %}<div class="muted">{{ log.exception_type }}: {{ log.exception_message }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </details>
+
+    <details>
+      <summary>📈 Métricas — {{ investigation.evidence_metrics | length }} registro(s)</summary>
+      <p class="text-block">{{ investigation.metrics_summary }}</p>
+    </details>
+
+    <details open>
+      <summary>🔗 Traces — {{ investigation.evidence_traces | length }} span(s)</summary>
+      <p class="text-block">{{ investigation.traces_summary }}</p>
+      {% for span in investigation.evidence_traces %}
+      <div class="evidence-item">
+        <span class="sev sev-{{ 'error' if span.span_status == 'ERROR' else 'info' }}">{{ span.span_status }}</span>
+        {{ span.operation_name }} — {{ span.http_status_code or '' }}
+      </div>
+      {% endfor %}
+    </details>
+
+    <h3>Relatório completo</h3>
+    <pre class="text-block">{{ investigation.report }}</pre>
+  </details>
+{% endif %}
+
+<script>
+  const pollTarget = document.getElementById('poll-target');
+  if (pollTarget) {
+    setInterval(async () => {
+      const res = await fetch(pollTarget.dataset.pollUrl);
+      const data = await res.json();
+      if (data.status && data.status !== 'running') {
+        window.location.reload();
+      }
+    }, 3000);
+  }
+
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.dataset.copyTarget);
+      await navigator.clipboard.writeText(target.value);
+      const original = btn.textContent;
+      btn.textContent = 'Copiado ✓';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+  });
+</script>
+{% endblock %}
