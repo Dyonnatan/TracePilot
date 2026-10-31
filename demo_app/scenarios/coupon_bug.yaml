@@ -1,0 +1,37 @@
+name: coupon_bug
+title: Deploy 1.1.0 do shop-api quebra checkout com cupom de 100%
+category: code_change
+culprit_component: shop-api (versão 1.1.0, pricing.py)
+pitch_role: extra
+ttl_seconds: null
+
+activation:
+  driver: deploy
+  params:
+    enable_command: make deploy-bad
+    disable_command: make deploy-good
+    version: 1.1.0
+
+user_symptom: >
+  Clientes que aplicam o cupom GRATIS100 no carrinho (botão "Aplicar")
+  recebem "Não consegui concluir a operação". Compras sem cupom ou com
+  DESC10 funcionam.
+
+expected_signals:
+  traces:
+    - Span servidor de POST /cart/quote (botão "Aplicar") com status de erro e exceção ZeroDivisionError registrada; POST /checkout com o cupom falha do mesmo jeito.
+    - Span pricing.quote com erro e atributo coupon.code=GRATIS100.
+    - Resource service.version=1.1.0 nos spans que falham.
+  logs:
+    - Log change.event "deploy shop-api 1.1.0" no startup, logo antes dos erros começarem.
+    - Log de erro com traceback apontando calcular_economia em pricing.py.
+  metrics:
+    - Erros 500 em POST /cart/quote (http_server_duration) aparecem só depois do deploy.
+
+root_cause: >
+  O deploy 1.1.0 introduziu em pricing.py o cálculo do preço original a
+  partir do total com desconto (total / (1 - desconto)). Com o cupom
+  GRATIS100 o desconto é 100% e a divisão por zero gera ZeroDivisionError.
+
+red_herrings:
+  - Erro só afeta uma fração dos checkouts (os que usam GRATIS100); a correlação com o horário do deploy é a pista principal.

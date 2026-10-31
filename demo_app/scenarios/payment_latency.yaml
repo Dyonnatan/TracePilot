@@ -1,0 +1,42 @@
+name: payment_latency
+title: Latência de rede entre shop-api e payment-service
+category: network
+culprit_component: network (shop-api -> payment-service)
+pitch_role: protagonist
+ttl_seconds: 120
+
+activation:
+  driver: toxiproxy
+  params:
+    proxy: payment
+    toxic: payment_latency
+    type: latency
+    stream: downstream
+    attributes:
+      latency: 1500
+      jitter: 0
+
+user_symptom: >
+  Todo "Finalizar pedido" termina com "Não consegui concluir a operação".
+  Vitrine, página de produto, carrinho e cupom continuam funcionando.
+
+expected_signals:
+  traces:
+    - Span cliente HTTP do shop-api para /authorize termina em ~1000 ms com erro (timeout).
+    - Span servidor do payment-service para /authorize continua curto (dezenas de ms).
+    - A diferença entre os dois spans indica o tempo perdido na rede.
+  logs:
+    - shop-api loga "payment.timeout" com trace_id e session.id.
+    - payment-service não loga erro.
+  metrics:
+    - shop.checkout.requests com outcome=payment_timeout sobe para 100% dos checkouts.
+    - payment.client.duration concentra em ~1000 ms.
+    - CPU/memória do payment-service (docker_stats) normais.
+
+root_cause: >
+  Latência de 1500 ms no caminho de rede entre shop-api e payment-service
+  (proxy de rede), acima do timeout de 1000 ms do cliente de pagamento. O
+  payment-service está saudável; o problema é a rede entre os serviços.
+
+red_herrings:
+  - O payment-service parece culpado porque é a dependência que "falha", mas seus spans e recursos estão normais.

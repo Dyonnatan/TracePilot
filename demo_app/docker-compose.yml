@@ -1,0 +1,89 @@
+# Ambiente de referência monitorado. Exporta telemetria para o
+# otel-collector do docker-compose.yml da raiz (rede externa `tracepilot`).
+# Suba a raiz antes: `make up` faz as duas coisas.
+name: tracepilot-demo
+
+x-otel: &otel
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  DEPLOYMENT_ENVIRONMENT: demo
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shop}
+      POSTGRES_DB: shop
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes:
+      - ./toxiproxy/toxiproxy.json:/config/toxiproxy.json:ro
+    depends_on:
+      - payment-service
+
+  payment-service:
+    build: ./payment-service
+    environment:
+      <<: *otel
+      FRAUD_SCORE_ITERATIONS: ${FRAUD_SCORE_ITERATIONS:-200000}
+    # Limite que o cenário cpu_saturation satura.
+    cpus: 0.5
+
+  shop-api:
+    build: ./shop-api
+    environment:
+      <<: *otel
+      SHOP_VERSION: ${SHOP_VERSION:-1.0.0}
+      DATABASE_URL: postgresql://shop:${POSTGRES_PASSWORD:-shop}@postgres:5432/shop
+      PAYMENT_URL: http://toxiproxy:8666
+      PAYMENT_TIMEOUT_S: "1.0"
+      DB_STATEMENT_TIMEOUT_MS: "2000"
+    ports:
+      - "127.0.0.1:${SHOP_PORT:-8088}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_started
+
+  chaos-control:
+    build: ./chaos-control
+    environment:
+      TOXIPROXY_URL: http://toxiproxy:8474
+      PAYMENT_INTERNAL_URL: http://payment-service:8001
+      DATABASE_URL: postgresql://shop:${POSTGRES_PASSWORD:-shop}@postgres:5432/shop
+    volumes:
+      - ./scenarios:/scenarios:ro
+    ports:
+      - "127.0.0.1:${CHAOS_PORT:-8090}:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_started
+
+  loadgen:
+    build: ./loadgen
+    environment:
+      SHOP_URL: http://shop-api:8080
+      LOADGEN_RPS: ${LOADGEN_RPS:-2}
+    depends_on:
+      - shop-api
+
+networks:
+  default:
+    name: tracepilot
+    external: true
+
+volumes:
+  postgres_data:

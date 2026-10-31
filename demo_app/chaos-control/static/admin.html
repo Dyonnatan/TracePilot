@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TracePilot · Chaos Control</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 1.25rem 1.5rem; border-bottom: 1px solid #1e293b; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: .25rem 0 0; color: #94a3b8; font-size: .9rem; }
+    main { display: grid; gap: 1rem; padding: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: .75rem; padding: 1rem; display: flex; flex-direction: column; gap: .6rem; }
+    .card.active { border-color: #f97316; box-shadow: 0 0 0 1px #f97316; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+    .title { font-weight: 600; }
+    .tag { font-size: .7rem; padding: .15rem .5rem; border-radius: 999px; background: #334155; color: #cbd5e1; text-transform: uppercase; letter-spacing: .04em; }
+    .tag.protagonist { background: #f97316; color: #0f172a; }
+    .symptom { color: #94a3b8; font-size: .9rem; margin: 0; }
+    .status { font-size: .85rem; color: #94a3b8; }
+    .status.on { color: #fdba74; font-weight: 600; }
+    button { border: 0; border-radius: .5rem; padding: .5rem .9rem; font-weight: 600; cursor: pointer; }
+    button.enable { background: #f97316; color: #0f172a; }
+    button.disable { background: #334155; color: #e2e8f0; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    code { background: #0f172a; padding: .15rem .4rem; border-radius: .3rem; }
+    details { font-size: .85rem; color: #cbd5e1; }
+    summary { cursor: pointer; color: #94a3b8; }
+    #error { display: none; margin: 1rem 1.5rem 0; padding: .75rem 1rem; border-radius: .5rem; background: #7f1d1d; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chaos Control</h1>
+    <p>Painel do apresentador. Fora da telemetria: nada daqui aparece no OpenObserve.</p>
+  </header>
+  <div id="error"></div>
+  <main id="scenarios"></main>
+
+  <template id="card-template">
+    <article class="card">
+      <div class="row"><span class="title"></span><span class="tag"></span></div>
+      <p class="symptom"></p>
+      <div class="row">
+        <span class="status"></span>
+        <span class="actions"></span>
+      </div>
+      <details><summary>Gabarito (causa raiz)</summary><p class="root-cause"></p></details>
+    </article>
+  </template>
+
+  <script>
+    const container = document.getElementById('scenarios');
+    const template = document.getElementById('card-template');
+    const errorBox = document.getElementById('error');
+    let scenarios = [];
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = message ? 'block' : 'none';
+    }
+
+    async function call(url, options) {
+      const response = await fetch(url, options);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+      return body;
+    }
+
+    async function refresh() {
+      try {
+        scenarios = await call('/api/scenarios');
+        render();
+      } catch (error) {
+        showError(`Não foi possível carregar os cenários: ${error.message}`);
+      }
+    }
+
+    async function toggle(name, action) {
+      showError('');
+      try {
+        await call(`/api/scenarios/${name}/${action}`, { method: 'POST' });
+      } catch (error) {
+        showError(error.message);
+      }
+      refresh();
+    }
+
+    function button(label, className, onClick) {
+      const element = document.createElement('button');
+      element.textContent = label;
+      element.className = className;
+      element.addEventListener('click', onClick);
+      return element;
+    }
+
+    function render() {
+      container.replaceChildren(...scenarios.map((scenario) => {
+        const card = template.content.firstElementChild.cloneNode(true);
+        card.classList.toggle('active', scenario.active);
+        card.querySelector('.title').textContent = scenario.title;
+        const tag = card.querySelector('.tag');
+        tag.textContent = scenario.pitch_role === 'protagonist' ? 'protagonista' : scenario.category;
+        tag.classList.toggle('protagonist', scenario.pitch_role === 'protagonist');
+        card.querySelector('.symptom').textContent = scenario.user_symptom;
+        card.querySelector('.root-cause').textContent = scenario.root_cause;
+
+        const status = card.querySelector('.status');
+        const actions = card.querySelector('.actions');
+        if (scenario.driver === 'deploy') {
+          const code = document.createElement('code');
+          code.textContent = scenario.params.enable_command;
+          status.replaceChildren('Manual: ', code);
+        } else if (scenario.active) {
+          const remaining = Math.max(0, Math.round(scenario.expires_at - Date.now() / 1000));
+          status.textContent = `ATIVO · desliga em ${remaining}s`;
+          status.classList.add('on');
+          actions.append(button('Desligar', 'disable', () => toggle(scenario.name, 'disable')));
+        } else {
+          status.textContent = `Inativo · TTL ${scenario.ttl_seconds}s`;
+          actions.append(button('Ligar', 'enable', () => toggle(scenario.name, 'enable')));
+        }
+        return card;
+      }));
+    }
+
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>
