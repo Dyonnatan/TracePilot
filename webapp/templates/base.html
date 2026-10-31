@@ -9,12 +9,13 @@
   {% set user = current_user(request) %}
   <header class="topbar">
     <a href="{{ '/dashboard' if user else '/' }}" class="brand">{{ brand.logo() }}TracePilot</a>
-    {% if user %}
     <div class="topbar-right">
+      {% if user %}
       <span class="topbar-user">{{ user.email }}</span>
       <form method="post" action="/logout"><button type="submit" class="link-button">Sair</button></form>
+      {% endif %}
+      {{ brand.theme_toggle() }}
     </div>
-    {% endif %}
   </header>
   <main class="{% block container_class %}container{% endblock %}">
     {% block content %}{% endblock %}

@@ -12,10 +12,11 @@
     <nav class="topbar-right">
       <a href="/#como-funciona">Como funciona</a>
       {% if user %}
-      <a href="/dashboard" class="btn btn-sm" style="color:var(--bg)">Abrir painel</a>
+      <a href="/dashboard" class="btn btn-sm nav-cta">Abrir painel</a>
       {% else %}
-      <a href="/login" class="btn btn-sm" style="color:var(--bg)">Entrar</a>
+      <a href="/login" class="btn btn-sm nav-cta">Entrar</a>
       {% endif %}
+      {{ brand.theme_toggle() }}
     </nav>
   </header>
   <main>

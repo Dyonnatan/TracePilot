@@ -17,7 +17,7 @@
   {% if status in ('warn', 'down') %}
   <circle cx="{{ x }}" cy="{{ y }}" r="10" class="dg-pulse"></circle>
   <circle cx="{{ x }}" cy="{{ y }}" r="10" class="dg-dot"></circle>
-  <text x="{{ x }}" y="{{ y + 4.5 }}" text-anchor="middle" style="font:700 13px var(--sans);fill:#0d0e10">{{ '!' if status == 'warn' else '✕' }}</text>
+  <text x="{{ x }}" y="{{ y + 4.5 }}" text-anchor="middle" style="font:700 13px var(--sans);fill:var(--bg)">{{ '!' if status == 'warn' else '✕' }}</text>
   {% endif %}
 {% endmacro %}
 
