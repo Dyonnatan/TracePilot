@@ -21,7 +21,7 @@ disparar investigações e aprofundar na evidência.
 |---|---|
 | `GET /` | Painel: status da app monitorada + do OpenObserve, formulário pra disparar investigação, lista das investigações já feitas. |
 | `POST /investigations` | Dispara `run_investigation()` numa thread em background (não bloqueia a requisição) e redireciona pro detalhe. |
-| `GET /investigations/{id}` | Detalhe: se `running`, faz polling via JS a cada 3s até terminar; se `done`, mostra causa provável, verificação (incluindo a checagem do Laya), e um drill-down (`<details>`) com a evidência bruta por fonte (logs/métricas/traces). |
+| `GET /investigations/{id}` | Detalhe: se `running`, faz polling via JS a cada 3s até terminar; se `done`, mostra primeiro um **card de decisão** (causa em linguagem simples + ações + prompt de correção com botão de copiar) — o resto (hipóteses técnicas, verificação, evidência bruta, relatório completo) fica dentro de um `<details>` fechado por padrão, pra não competir visualmente com o que importa decidir em segundos. |
 | `GET /api/investigations/{id}` | JSON usado pelo polling da página de detalhe. |
 | `GET /api/health` | Status da app monitorada + streams do OpenObserve, em JSON. |
 
@@ -105,14 +105,36 @@ Decisão de design: são dois agentes separados (não um só) para que o
 verificador tenha um papel adversarial explícito — reduzir alucinação ao
 forçar uma segunda "opinião" que só aceita conclusões com evidência citada.
 
+## `agents/plain_summary_agent.py` — resumo em linguagem simples
+
+Módulo novo, pensado pro usuário final (dono da aplicação, não técnico):
+pega as hipóteses técnicas + a verificação e pede ao LLM uma tradução
+curta — 1 frase de causa (termos técnicos sempre seguidos de explicação
+entre parênteses) + no máximo 2 ações concretas. Parsing por prefixo
+(`CAUSA:`/`ACAO:`) com fallback gracioso se o modelo não seguir o formato
+(usa o texto bruto como causa em vez de quebrar). O prompt proíbe
+explicitamente mencionar nomes internos do sistema ("especialista em
+logs", "agente", "TracePilot") — são vazamentos de implementação que não
+fazem sentido pra quem só quer saber o que aconteceu e o que fazer.
+
+## `agents/fix_prompt.py` — prompt pronto para a IA corrigir
+
+Módulo novo: monta um prompt detalhado pra colar numa IA de código (Claude
+Code, Cursor etc.), **sem chamada de LLM** — usa diretamente os campos já
+extraídos do log de erro (`code_file_path`, `code_function_name`,
+`code_line_number`, `exception_stacktrace`, todos confirmados reais em
+`openobserve_client.py`). Decisão de design: isso é mais confiável que
+pedir pro LLM reescrever o stacktrace — dado exato não se parafraseia.
+
 ## `agents/report.py` — composição do relatório final
 
-Módulo novo: monta o relatório em Markdown a partir do estado final, **sem
-nenhuma chamada de LLM adicional** — todo o conteúdo (hipóteses, resumos,
-veredito) já foi gerado pelos nós anteriores. Decisão de design
-deliberada: manter o custo de uma investigação em no máximo 5 chamadas de
-LLM (logs, métricas, traces, diagnóstico, verificação), já que o MVP usa
-modelos pequenos/baratos via OpenRouter e cada chamada extra tem custo.
+Monta o relatório em Markdown a partir do estado final, **sem nenhuma
+chamada de LLM adicional** — todo o conteúdo já foi gerado pelos nós
+anteriores. Agora inclui, no topo, o resumo simples (causa + ações) e o
+prompt de correção. Decisão de design deliberada: manter o custo de uma
+investigação em 6 chamadas de LLM (logs, métricas, traces, diagnóstico,
+verificação, resumo simples) — compor o relatório/prompt de correção em si
+não soma uma sétima.
 
 ## `agents/report_store.py` — persistência de investigações
 
