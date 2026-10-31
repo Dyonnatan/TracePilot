@@ -1,10 +1,14 @@
 """Grafo de orquestração (padrão Supervisor-Trabalhador) dos agentes do
 TracePilot, usando LangGraph.
 
-Fase atual: só a fiação do grafo (nós e arestas). A lógica de decisão de
-cada nó vive nos módulos de `agents.specialists`, `agents.diagnosis_agent`
-e `agents.verifier_agent` — todos ainda com TODO.
+Fluxo atual: linear e fixo (orchestrator → logs → metrics → traces →
+diagnosis → verifier → report). O roteamento dinâmico (orchestrator
+decidindo qual especialista consultar e podendo voltar a um deles se o
+verifier rejeitar o diagnóstico) fica para uma próxima iteração — ver
+docs/code-architecture.md.
 """
+import argparse
+import json
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -13,23 +17,37 @@ from agents.llm import get_provider
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.specialists import logs_agent, metrics_agent, traces_agent
 from agents import diagnosis_agent, verifier_agent
+from agents.report import build_report
 
 
 class IncidentState(TypedDict, total=False):
     error_report: str
+    service: str
+    trace_id: str
+    metric_name: str
+    start_time: int
+    end_time: int
     evidence_logs: list
     evidence_metrics: list
     evidence_traces: list
-    hypotheses: list
+    logs_summary: str
+    metrics_summary: str
+    traces_summary: str
+    hypotheses: str
     verified: bool
+    verification_notes: str
     report: str
 
 
 def orchestrator_node(state: IncidentState) -> IncidentState:
-    """Decide qual especialista consultar em seguida, com base no que já
-    foi coletado. TODO: lógica de decisão (hoje só repassa o estado).
+    """Ponto de entrada do grafo. TODO: decidir dinamicamente a próxima
+    etapa (hoje o roteamento é fixo, ver arestas em build_graph()).
     """
     return state
+
+
+def report_node(state: IncidentState) -> IncidentState:
+    return {**state, "report": build_report(state)}
 
 
 def build_graph() -> StateGraph:
@@ -44,6 +62,7 @@ def build_graph() -> StateGraph:
     graph.add_node("traces_agent", lambda s: traces_agent.run(s, llm, client))
     graph.add_node("diagnosis_agent", lambda s: diagnosis_agent.run(s, llm))
     graph.add_node("verifier_agent", lambda s: verifier_agent.run(s, llm))
+    graph.add_node("report", report_node)
 
     graph.set_entry_point("orchestrator")
 
@@ -55,13 +74,47 @@ def build_graph() -> StateGraph:
     graph.add_edge("metrics_agent", "traces_agent")
     graph.add_edge("traces_agent", "diagnosis_agent")
     graph.add_edge("diagnosis_agent", "verifier_agent")
-    graph.add_edge("verifier_agent", END)
+    graph.add_edge("verifier_agent", "report")
+    graph.add_edge("report", END)
 
     return graph.compile()
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Investiga um incidente com os agentes do TracePilot.")
+    parser.add_argument("error_report", help="Relato do erro (ex.: mensagem do usuário ou do endpoint).")
+    parser.add_argument("--service", default="tracepilot-demo-app", help="Nome do serviço a investigar.")
+    parser.add_argument("--trace-id", default=None, help="trace_id específico, se já conhecido.")
+    parser.add_argument("--metric-name", default="duration", help="Nome da métrica a consultar (quando disponível).")
+    parser.add_argument("--window-minutes", type=int, default=60, help="Janela de busca, em minutos, a partir de agora.")
+    parser.add_argument("--json", action="store_true", help="Imprime o estado final completo em JSON em vez do relatório formatado.")
+    return parser.parse_args()
+
+
+def main() -> None:
+    import time
+
+    args = _parse_args()
+    now_us = int(time.time() * 1_000_000)
+    start_us = now_us - args.window_minutes * 60 * 1_000_000
+
+    initial_state: IncidentState = {
+        "error_report": args.error_report,
+        "service": args.service,
+        "metric_name": args.metric_name,
+        "start_time": start_us,
+        "end_time": now_us,
+    }
+    if args.trace_id:
+        initial_state["trace_id"] = args.trace_id
+
+    final_state = build_graph().invoke(initial_state)
+
+    if args.json:
+        print(json.dumps(final_state, default=str, ensure_ascii=False, indent=2))
+    else:
+        print(final_state["report"])
+
+
 if __name__ == "__main__":
-    # TODO: ler um relato de erro real (ex.: via CLI ou endpoint da API) em
-    # vez desse placeholder, uma vez que a lógica dos agentes existir.
-    app = build_graph()
-    app.invoke({"error_report": "exemplo de relato de erro"})
+    main()
