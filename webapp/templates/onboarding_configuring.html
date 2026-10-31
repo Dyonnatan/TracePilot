@@ -1,79 +1,31 @@
 {% extends "onboarding_base.html" %}
-{% block title %}Configurando — TracePilot{% endblock %}
+{% block title %}Análise · TracePilot{% endblock %}
 {% block step %}
 {% set res = {} %}
 {% for r in state.resources %}{% set _ = res.update({r.key: r}) %}{% endfor %}
-
-<h1>Conhecendo o seu sistema…</h1>
-<p class="muted">O TracePilot está identificando a máquina onde tudo roda, os recursos
-disponíveis e como as partes se conectam. Leva só alguns segundos.</p>
-
-<div class="scan-progress" aria-hidden="true"><div class="scan-progress-fill" data-scan-bar></div></div>
-<p class="scan-progress-label muted small" data-scan-label>Iniciando…</p>
-
-<ul class="scan-list" data-scan>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Encontrando a máquina hospedeira</span>
-    <span class="scan-result">Máquina: <strong>{{ snapshot.host_name.value or 'não identificada' }}</strong> <span class="badge">{{ res.cpu.source_text }}</span></span></div>
-  </li>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Identificando o processador</span>
-    <span class="scan-result">Processador: <strong>{{ snapshot.cpu.core_count.value or '—' }} núcleos</strong>, em uso agora: <strong>{{ res.cpu.display }}</strong></span></div>
-  </li>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Medindo a memória</span>
-    <span class="scan-result">Memória: <strong>{{ res.memory.detail or 'sem dado ainda' }}</strong></span></div>
-  </li>
-  <li class="scan-item {{ 'is-warn' if res.disk.status in ('warn','down') }}">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Verificando o espaço em disco</span>
-    <span class="scan-result">Disco: <strong>{{ res.disk.detail or 'sem dado ainda' }}</strong>{% if res.disk.status in ('warn','down') %} — <span class="text-warn">já está em {{ res.disk.display }}, vamos ficar de olho</span>{% endif %}</span></div>
-  </li>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Procurando placa de vídeo</span>
-    <span class="scan-result">GPU: <strong>{{ snapshot.gpu.name if snapshot.gpu.name else 'nenhuma detectada (normal para a maioria dos sites)' }}</strong></span></div>
-  </li>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Medindo o tráfego de rede</span>
-    <span class="scan-result">Rede: <strong>{{ res.network.detail }}</strong></span></div>
-  </li>
-  <li class="scan-item {{ 'is-warn' if not demo_app.up }}">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Testando o acesso ao seu sistema</span>
-    <span class="scan-result">{{ profile.system_name or 'Sistema' }}:
-      {% if demo_app.up %}<strong>no ar, respondeu em {{ demo_app.latency_ms | round | int }} ms</strong>
-      {% else %}<strong class="text-warn">não respondeu agora</strong>{% endif %}</span></div>
-  </li>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Identificando tecnologias</span>
-    <span class="scan-result">
-      {% if repo_info and repo_info.analyzed %}Tecnologias no repositório: <strong>{{ (repo_info.languages or {}).keys() | list | join(', ') or repo_info.primary_language }}</strong>
-      {% elif profile.repo_url %}Repositório informado, mas <strong>não foi possível analisar</strong> automaticamente
-      {% else %}<strong>sem repositório</strong> — pulando (dá para adicionar depois){% endif %}
-    </span></div>
-  </li>
-  <li class="scan-item">
-    <span class="scan-state"></span>
-    <div><span class="scan-doing">Montando o mapa da arquitetura</span>
-    <span class="scan-result"><strong>pronto</strong> — usuários → site → banco de dados, no servidor {{ snapshot.host_name.value or '' }}</span></div>
-  </li>
+{% macro row(k, v, warn=False) %}
+<li class="{{ 'is-warn' if warn }}"><span class="s"></span><span class="k">{{ k }}</span><span class="v"><span class="pending">…</span><span class="result">{{ v }}</span></span></li>
+{% endmacro %}
+<h1>Analisando o servidor</h1>
+<p class="lead">Identificando a máquina e o sistema.</p>
+<div class="scan-bar"><div data-scan-bar></div></div>
+<p class="scan-status" data-scan-label>iniciando</p>
+<ul class="scan" data-scan>
+  {{ row('Máquina', snapshot.host_name.value or 'não identificada') }}
+  {{ row('Processador', (snapshot.cpu.core_count.value or '—') ~ ' núcleos · ' ~ res.cpu.display ~ ' em uso') }}
+  {{ row('Memória', res.memory.detail or 'sem dado') }}
+  {{ row('Disco', res.disk.display ~ ' usado · ' ~ (res.disk.detail or ''), res.disk.status in ('warn', 'down')) }}
+  {{ row('Placa de vídeo', snapshot.gpu.name or 'nenhuma') }}
+  {{ row('Rede', res.network.detail) }}
+  {{ row(profile.system_name or 'Sistema', ('no ar · ' ~ (demo_app.latency_ms | round | int) ~ ' ms') if demo_app.up else 'não respondeu', not demo_app.up) }}
+  {{ row('Conexão', state.connection.text ~ (' · ' ~ state.connection.via if state.connection.via else ''), state.connection.status != 'ok') }}
+  {{ row('Tecnologias', ((repo_info.languages or {}).keys() | list)[:5] | join(', ') if repo_info and repo_info.analyzed else 'sem repositório') }}
 </ul>
-
-<noscript><style>.scan-item{opacity:1!important}.scan-doing{display:none}.scan-result{display:inline!important}</style></noscript>
-
-<div class="wizard-actions">
-  <a href="/onboarding/summary" class="btn-lg hidden" id="continue-link">Ver o que encontramos →</a>
-</div>
-
+<div class="actions"><a href="/onboarding/summary" class="btn btn-lg hidden" id="continue-link">Ver resumo</a></div>
+<noscript><style>.scan li{opacity:1}.scan .pending{display:none}.scan .result{display:inline}#continue-link{display:inline-flex!important}</style></noscript>
 <script>
   (function () {
-    const items = Array.from(document.querySelectorAll('[data-scan] .scan-item'));
+    const items = Array.from(document.querySelectorAll('[data-scan] li'));
     const bar = document.querySelector('[data-scan-bar]');
     const label = document.querySelector('[data-scan-label]');
     let i = 0;
@@ -81,18 +33,17 @@ disponíveis e como as partes se conectam. Leva só alguns segundos.</p>
       if (i > 0) items[i - 1].classList.replace('is-running', 'is-done');
       if (i === items.length) {
         bar.style.width = '100%';
-        label.textContent = 'Tudo identificado ✓';
+        label.textContent = 'concluído';
         document.getElementById('continue-link').classList.remove('hidden');
         return;
       }
       items[i].classList.add('is-visible', 'is-running');
-      label.textContent = items[i].querySelector('.scan-doing').textContent + '…';
+      label.textContent = items[i].querySelector('.k').textContent.toLowerCase() + '…';
       bar.style.width = `${(i / items.length) * 100}%`;
       i += 1;
-      setTimeout(next, 550 + Math.random() * 350);
+      setTimeout(next, 450 + Math.random() * 300);
     }
     next();
   })();
 </script>
-
 {% endblock %}

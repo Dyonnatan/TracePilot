@@ -1,27 +1,18 @@
 {% extends "base_marketing.html" %}
-{% block title %}Entrar — TracePilot{% endblock %}
+{% block title %}Entrar · TracePilot{% endblock %}
 {% block content %}
-
-<section class="login-card">
-  <h1>Entrar no TracePilot</h1>
-  <p class="muted">Identifique-se para continuar. Isto é uma demonstração —
-  não há senha, o acesso é só para identificar esta sessão.</p>
-
-  <form method="post" action="/login" class="form-stack">
-    <label>
-      Seu nome
-      <input type="text" name="name" value="{{ prefill_name }}" placeholder="ex.: Ana Souza" required autofocus>
+<section class="auth">
+  <h1>Entrar</h1>
+  <form method="post" action="/login" class="form">
+    <label class="field"><span>E-mail</span>
+      <input type="email" name="email" value="{{ prefill_email }}" autocomplete="username" required {{ '' if prefill_email else 'autofocus' }}>
     </label>
-    <label>
-      Seu e-mail
-      <input type="email" name="email" value="{{ prefill_email }}" placeholder="ex.: voce@empresa.com" required>
+    <label class="field"><span>Senha</span>
+      <input type="password" name="password" value="{{ prefill_password }}" autocomplete="{{ 'new-password' if first_access else 'current-password' }}" required {{ 'autofocus' if prefill_email and not prefill_password }}>
     </label>
+    {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
     <button type="submit">Entrar</button>
   </form>
-
-  <p class="login-disclaimer">🔒 Login simplificado de demonstração — sem
-  cadastro de senha. Em uma versão real, isto seria substituído por
-  autenticação de verdade.</p>
+  {% if first_access %}<p class="auth-foot">Primeiro acesso: a senha digitada vira a sua.</p>{% endif %}
 </section>
-
 {% endblock %}

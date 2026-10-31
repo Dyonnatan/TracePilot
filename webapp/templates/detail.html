@@ -9,14 +9,14 @@
 
 {% elif investigation.status == 'running' %}
   <section class="panel" id="poll-target" data-poll-url="/api/investigations/{{ investigation_id }}">
-    <h2>⏳ Investigando…</h2>
+    <h2>Investigando…</h2>
     <p class="muted">{{ investigation.error_report }}</p>
-    <p class="muted">Isso pode levar de alguns segundos a poucos minutos, dependendo do modelo configurado. A página atualiza sozinha.</p>
+    <p class="muted small">Leva de segundos a alguns minutos. A página atualiza sozinha.</p>
   </section>
 
 {% elif investigation.status == 'error' %}
   <section class="panel">
-    <h2>❌ Erro na investigação</h2>
+    <h2>Erro na investigação</h2>
     <p class="muted">{{ investigation.error_report }}</p>
     <pre class="error-box">{{ investigation.error }}</pre>
   </section>
@@ -26,7 +26,7 @@
   {# ---- Resumo de decisão: o que a pessoa vê primeiro, em segundos ---- #}
   <section class="decision-card {{ 'ok' if investigation.verified else 'warn' }}">
     <div class="decision-status">
-      {% if investigation.verified %}✅ Causa encontrada{% else %}⚠️ Ainda não temos certeza{% endif %}
+      {% if investigation.verified %}Causa encontrada{% else %}Ainda sem certeza{% endif %}
     </div>
     <p class="decision-cause">{{ investigation.plain_cause }}</p>
 
@@ -44,7 +44,7 @@
     {% if investigation.fix_prompt %}
     <div class="fix-prompt-box">
       <div class="fix-prompt-header">
-        <span>📋 Prompt pronto para colar na IA que vai corrigir</span>
+        <span>Prompt para a IA corrigir</span>
         <button type="button" class="copy-btn" data-copy-target="fix-prompt-text">Copiar</button>
       </div>
       <textarea id="fix-prompt-text" readonly>{{ investigation.fix_prompt }}</textarea>
@@ -54,7 +54,7 @@
 
   {# ---- Detalhe técnico: fica fechado, só quem quiser aprofunda ---- #}
   <details class="panel tech-details">
-    <summary>🔍 Ver detalhes técnicos completos</summary>
+    <summary>Detalhes técnicos</summary>
 
     <h3>Causa provável (diagnóstico técnico)</h3>
     <pre class="text-block">{{ investigation.hypotheses }}</pre>
@@ -67,7 +67,7 @@
 
     <h3>Evidência bruta</h3>
     <details open>
-      <summary>📋 Logs — {{ investigation.evidence_logs | length }} registro(s)</summary>
+      <summary>Logs · {{ investigation.evidence_logs | length }} registro(s)</summary>
       <p class="text-block">{{ investigation.logs_summary }}</p>
       {% for log in investigation.evidence_logs %}
       <div class="evidence-item">
@@ -79,12 +79,12 @@
     </details>
 
     <details>
-      <summary>📈 Métricas — {{ investigation.evidence_metrics | length }} registro(s)</summary>
+      <summary>Métricas · {{ investigation.evidence_metrics | length }} registro(s)</summary>
       <p class="text-block">{{ investigation.metrics_summary }}</p>
     </details>
 
     <details open>
-      <summary>🔗 Traces — {{ investigation.evidence_traces | length }} span(s)</summary>
+      <summary>Traces · {{ investigation.evidence_traces | length }} span(s)</summary>
       <p class="text-block">{{ investigation.traces_summary }}</p>
       {% for span in investigation.evidence_traces %}
       <div class="evidence-item">
@@ -116,7 +116,7 @@
       const target = document.getElementById(btn.dataset.copyTarget);
       await navigator.clipboard.writeText(target.value);
       const original = btn.textContent;
-      btn.textContent = 'Copiado ✓';
+      btn.textContent = 'Copiado';
       setTimeout(() => { btn.textContent = original; }, 1500);
     });
   });

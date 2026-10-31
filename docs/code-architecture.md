@@ -20,7 +20,7 @@ disparar investigações e aprofundar na evidência.
 | Rota | O que faz |
 |---|---|
 | `GET /` | Landing page pública sobre o produto (com botão de login). O hero reaproveita o diagrama do painel com dados **ilustrativos** (`monitoring.example_state()`), nunca dado real. |
-| `GET/POST /login`, `POST /logout` | Login simplificado de demo (nome + e-mail em cookie, sem senha). Primeiro acesso → `/onboarding`; depois → `/dashboard`. |
+| `GET/POST /login`, `POST /logout` | Login por e-mail e senha (`webapp/auth.py`): o primeiro login cria a conta do workspace (hash PBKDF2 no perfil); a sessão é um cookie assinado com HMAC. Primeiro acesso → `/onboarding`; depois → `/dashboard`. |
 | `/onboarding/*` | Jornada de primeiro acesso em 7 passos: boas-vindas → questionário (nome, objetivo, como foi feito, onde roda) → instalação do agente → repositório (opcional, GitHub) → checagem de conexão → "configurando" (identificação animada da máquina, recursos, tecnologias) → resumo com checklists, tecnologias e diagrama. Estado em `workspace/profile.json` (`agents/workspace_store.py`). `POST /onboarding/reset` volta a jornada pro início (pra demonstrar de novo). |
 | `GET /dashboard` | Painel: status geral em linguagem simples, **mapa interativo** (usuários → site → banco, dentro do servidor, observado pelo TracePilot; cada nó com ícone de alerta), indicadores de CPU/RAM/disco/rede/GPU com tendência e "?" explicativo, alertas ("problema agora" × "pode virar problema") com o que fazer, formulário de investigação e histórico. |
 | `GET /dashboard/live` | Só o miolo que muda (HTML parcial) — o `static/app.js` troca a cada 10s enquanto a aba está visível. `GET /api/dashboard` devolve o mesmo estado em JSON. |
@@ -38,6 +38,17 @@ O banco de dados aparece sempre como "sem dados": o TracePilot não se
 conecta a ele nesta versão. Quando o agente Rust não reporta,
 `resource_snapshot.py` mede CPU/RAM/rede (`/proc`) e GPU (`nvidia-smi`)
 do host do **painel**, sempre marcado como `source="local"` na tela.
+
+**Conexão no mapa**: o nó "TracePilot" diz se os dados estão chegando e
+por onde — `agente` (métricas do `local-agent` nos últimos 5 min),
+`API` (logs/spans com `tracepilot_ingest_mode=direct_api`, ver `ingest/`)
+ou `OTel` (logs/spans do serviço sem essa marca, ou seja, SDK do
+OpenTelemetry direto) — via `OpenObserveClient.recent_sources()`.
+
+**Métricas no OpenObserve**: cada métrica OTLP vira um stream próprio
+(`system.cpu.usage_percent` → `system_cpu_usage_percent`), com o valor em
+`value`. `query_metrics` deriva o stream do nome; antes consultava
+`default` e por isso o painel nunca reconhecia o agente.
 
 **Preset de demonstração** (`webapp/presets.py` + `webapp/presets/*.json`,
 escolhido por `TRACEPILOT_PRESET`, padrão `reference-environment`):

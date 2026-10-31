@@ -1,77 +1,43 @@
 {% extends "onboarding_base.html" %}
-{% block title %}Sobre o sistema — TracePilot{% endblock %}
+{% block title %}Sistema · TracePilot{% endblock %}
+{% macro choice(name, value, text, current) -%}
+<label class="choice"><input type="radio" name="{{ name }}" value="{{ value }}" {{ 'checked' if current == value }}><span>{{ text }}</span></label>
+{%- endmacro %}
 {% block step %}
+<h1>Seu sistema</h1>
+<p class="lead">Leva um minuto.</p>
 
-<h1>Sobre o sistema que você quer monitorar</h1>
-<p class="muted">Isso ajuda o TracePilot a entender o contexto certo antes
-de investigar qualquer problema. Nada aqui é obrigatório ficar perfeito —
-dá pra editar depois.</p>
-
-<form method="post" action="/onboarding/about" class="form-stack">
-  <label>
-    Nome do sistema
-    <input type="text" name="system_name" value="{{ form.system_name or '' }}" placeholder="ex.: Loja da Ana, Sistema de Agendamento..." required>
+<form method="post" action="/onboarding/about" class="form">
+  <label class="field"><span>Nome</span>
+    <input type="text" name="system_name" value="{{ form.system_name or '' }}" placeholder="Loja da Ana" required>
   </label>
-
-  <label>
-    O que ele faz? (objetivo e funcionamento, em poucas linhas)
-    <textarea name="objective" placeholder="ex.: é uma loja online onde clientes fazem pedidos e pagam; o backend calcula o preço e salva o pedido no banco.">{{ form.objective or '' }}</textarea>
+  <label class="field"><span>Endereço</span>
+    <input type="url" name="app_url" value="{{ form.app_url or '' }}" placeholder="https://lojadaana.com.br" required>
   </label>
-
-  <label>
-    Como ele foi construído?
-    <select name="dev_method">
-      <option value="ai_assisted" {{ 'selected' if form.dev_method == 'ai_assisted' }}>Vibe coding / com ajuda de IA</option>
-      <option value="no_code" {{ 'selected' if form.dev_method == 'no_code' }}>Plataforma no-code / low-code</option>
-      <option value="traditional" {{ 'selected' if form.dev_method == 'traditional' }}>Desenvolvimento tradicional (código escrito à mão)</option>
-      <option value="other" {{ 'selected' if form.dev_method == 'other' }}>Outro</option>
-    </select>
+  <label class="field"><span>O que ele faz? <em>opcional</em></span>
+    <input type="text" name="objective" value="{{ form.objective or '' }}" placeholder="Loja online com carrinho e pagamento">
   </label>
-
-  <label>
-    Qual ferramenta/IA/plataforma, especificamente? (opcional)
-    <input type="text" name="dev_method_tool" value="{{ form.dev_method_tool or '' }}" placeholder="ex.: Claude Code, Cursor, v0, bolt.new, Replit, Django, framework próprio...">
-  </label>
-
-  <label>
-    Situação atual
-    <select name="environment">
-      <option value="not_deployed" {{ 'selected' if form.environment == 'not_deployed' }}>Ainda não publiquei</option>
-      <option value="local_server" {{ 'selected' if form.environment == 'local_server' }}>Servidor local (minha própria máquina)</option>
-      <option value="dedicated_server" {{ 'selected' if form.environment == 'dedicated_server' }}>Servidor dedicado</option>
-      <option value="vps" {{ 'selected' if form.environment == 'vps' }}>VPS (nuvem)</option>
-      <option value="production" {{ 'selected' if form.environment == 'production' }}>Já em produção</option>
-    </select>
-  </label>
-  <p class="inline-note">💡 Para esta demonstração, vamos usar um servidor
-  de teste real: você mesmo vai instalar o agente leve do TracePilot nele
-  no próximo passo — não importa qual opção você escolheu acima.</p>
-
-  <label>
-    Mais algum detalhe sobre onde/como ele roda? (opcional)
-    <textarea name="environment_notes" placeholder="ex.: roda num container Docker, atrás de um Nginx...">{{ form.environment_notes or '' }}</textarea>
-  </label>
-
-  <label>
-    Endereço onde o sistema abre (URL)
-    <input type="url" name="app_url" value="{{ form.app_url or '' }}" placeholder="ex.: https://minhaloja.com.br ou http://localhost:8080">
-  </label>
-  <p class="muted small">O TracePilot usa esse endereço para conferir, de tempos em tempos,
-  se o sistema está no ar e quanto tempo demora para responder.</p>
-
-  <details class="advanced">
-    <summary>Opções avançadas</summary>
-    <label>
-      Nome do serviço na telemetria (OpenTelemetry <code>service.name</code>)
-      <input type="text" name="service_name" value="{{ form.service_name or '' }}" placeholder="ex.: minha-api">
-    </label>
-    <p class="muted small">É como o seu sistema se identifica nos registros. Se você não
-    sabe o que é, pode deixar como está.</p>
-  </details>
-
-  <div class="wizard-actions">
-    <button type="submit">Continuar →</button>
+  <div class="field"><span>Como foi feito?</span>
+    <div class="choices">
+      {{ choice('dev_method', 'ai_assisted', 'Com IA', form.dev_method) }}
+      {{ choice('dev_method', 'no_code', 'No-code', form.dev_method) }}
+      {{ choice('dev_method', 'traditional', 'Programado à mão', form.dev_method) }}
+    </div>
   </div>
+  <div class="field"><span>Onde roda?</span>
+    <div class="choices">
+      {{ choice('environment', 'local_server', 'Meu computador', form.environment) }}
+      {{ choice('environment', 'vps', 'VPS / nuvem', form.environment) }}
+      {{ choice('environment', 'dedicated_server', 'Servidor próprio', form.environment) }}
+      {{ choice('environment', 'not_deployed', 'Ainda não publiquei', form.environment) }}
+    </div>
+  </div>
+  <details class="more">
+    <summary>Avançado</summary>
+    <label class="field"><span>Nome do serviço (OpenTelemetry)</span>
+      <input type="text" name="service_name" value="{{ form.service_name or '' }}" placeholder="minha-api">
+    </label>
+  </details>
+  <div class="actions"><button type="submit" class="btn-lg">Continuar</button></div>
 </form>
-
 {% endblock %}

@@ -1,16 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Painel — {{ state.system_name }} — TracePilot{% endblock %}
-{% block container_class %}container container-wide{% endblock %}
+{% block title %}{{ state.system_name }} · TracePilot{% endblock %}
 {% block content %}
 
 <div class="dash-head">
   <div>
     <h1>{{ state.system_name }}</h1>
-    <p class="live-line"><span class="live-dot" aria-hidden="true"></span> Monitoramento ativo · <span data-updated>atualizado agora</span>
-      <button type="button" class="link-button" data-refresh-now>atualizar</button></p>
-  </div>
-  <div class="dash-head-actions">
-    <a href="#investigar" class="btn">🤖 Investigar um problema</a>
+    <div class="live"><span class="live-dot"></span><span data-updated>ao vivo</span>
+      <button type="button" class="link-button" data-refresh-now>atualizar</button></div>
   </div>
 </div>
 
@@ -18,76 +14,50 @@
   {% include "_dashboard_live.html" %}
 </div>
 
-<section class="panel" id="investigar">
-  <div class="panel-head">
-    <h2>🤖 Investigar um problema com IA</h2>
-  </div>
-  <p class="muted">Descreva com suas palavras o que está acontecendo — do jeito que um
-  cliente reclamaria. Os agentes de IA vasculham os registros, métricas e rastros
-  e respondem com a causa provável e o que fazer.</p>
-  <form method="post" action="/investigations" class="investigate-form">
-    <label>
-      O que está acontecendo?
-      <textarea name="error_report" id="error-report" placeholder="ex.: cliente reclamou que não conseguiu finalizar a compra, apareceu erro 500" required></textarea>
-    </label>
-    <details class="advanced">
-      <summary>Opções avançadas</summary>
-      <label class="inline">
-        Nome do serviço monitorado
-        <input type="text" name="service" value="{{ monitored_service }}">
-      </label>
+<section class="card" id="investigar">
+  <div class="section-head"><span class="label">Investigar com IA</span></div>
+  <form method="post" action="/investigations">
+    <div class="investigate">
+      <textarea name="error_report" id="error-report" placeholder="O que está acontecendo? Ex.: cliente não consegue finalizar a compra" required></textarea>
+      <button type="submit">Investigar</button>
+    </div>
+    <details class="investigate-more">
+      <summary>Serviço</summary>
+      <input type="text" name="service" value="{{ monitored_service }}">
     </details>
-    <button type="submit">Investigar</button>
   </form>
 </section>
 
-<section class="panel">
-  <div class="panel-head"><h2>🗂️ Investigações anteriores</h2></div>
-  {% if investigations %}
+{% if investigations %}
+<section class="card">
+  <div class="section-head"><span class="label">Histórico</span></div>
   <div class="table-scroll">
   <table class="investigations">
-    <thead>
-      <tr><th>Quando</th><th>Relato</th><th>Resultado</th><th></th></tr>
-    </thead>
+    <thead><tr><th>Quando</th><th>Relato</th><th>Resultado</th><th></th></tr></thead>
     <tbody>
       {% for inv in investigations %}
       <tr>
-        <td class="muted">{{ inv.created_at | int | timestamp_to_str if inv.created_at else '-' }}</td>
+        <td class="when">{{ inv.created_at | int | timestamp_to_str if inv.created_at else '-' }}</td>
         <td>{{ inv.error_report }}</td>
         <td>
-          {% if inv.status == 'done' and inv.verified %}<span class="badge ok">✓ causa encontrada</span>
-          {% elif inv.status == 'done' %}<span class="badge warn">! sem certeza</span>
-          {% elif inv.status == 'running' %}<span class="badge pending">⏳ investigando</span>
-          {% elif inv.status == 'error' %}<span class="badge down">✕ erro</span>
+          {% if inv.status == 'done' and inv.verified %}<span class="badge ok">causa encontrada</span>
+          {% elif inv.status == 'done' %}<span class="badge warn">inconclusivo</span>
+          {% elif inv.status == 'running' %}<span class="badge pending">investigando</span>
+          {% elif inv.status == 'error' %}<span class="badge down">erro</span>
           {% else %}<span class="badge">{{ inv.status }}</span>{% endif %}
         </td>
-        <td><a href="/investigations/{{ inv.id }}">ver →</a></td>
+        <td><a href="/investigations/{{ inv.id }}">abrir</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
-  {% else %}
-  <p class="empty-state">Nenhuma investigação ainda. Quando algo der errado, descreva acima e a IA investiga.</p>
-  {% endif %}
 </section>
-
-<details class="panel how-to-read">
-  <summary>📖 Como ler este painel</summary>
-  <ul>
-    <li><b>Verde ✓</b> — funcionando bem. Nada a fazer.</li>
-    <li><b>Amarelo !</b> — <i>pode virar problema</i>. Ainda funciona, mas chegou num nível em que costuma dar problema se continuar subindo. É o aviso antecipado.</li>
-    <li><b>Vermelho ✕</b> — <i>problema agora</i>. Algo parou ou está no limite; as pessoas provavelmente já estão sentindo.</li>
-    <li><b>Cinza ?</b> — sem dados. O TracePilot não mede isso ainda (ou o agente não está conectado) e prefere não chutar.</li>
-    <li>O painel se atualiza sozinho a cada 10 segundos enquanto estiver aberto.</li>
-  </ul>
-</details>
+{% endif %}
 
 <div class="dash-foot">
-  <a class="link-out" href="{{ openobserve_url }}" target="_blank" rel="noopener">Ver dados brutos no OpenObserve (avançado) →</a>
-  <form method="post" action="/onboarding/reset">
-    <button type="submit" class="link-button">↺ Refazer a configuração inicial</button>
-  </form>
+  <a href="{{ openobserve_url }}" target="_blank" rel="noopener">Dados brutos (OpenObserve)</a>
+  <form method="post" action="/onboarding/reset"><button type="submit" class="link-button">Refazer configuração</button></form>
 </div>
 
 <script src="/static/app.js"></script>

@@ -1,22 +1,18 @@
+{% import "_brand.html" as brand %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {{ brand.head() }}
   <title>{% block title %}TracePilot{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   {% set user = current_user(request) %}
   <header class="topbar">
-    <a href="{{ '/dashboard' if user else '/' }}" class="brand">🛰️ TracePilot</a>
-    <span class="tagline">monitoramento que explica em português</span>
+    <a href="{{ '/dashboard' if user else '/' }}" class="brand">{{ brand.logo() }}TracePilot</a>
     {% if user %}
-    <div class="topbar-user">
-      <span class="topbar-user-name">{{ user.name }}</span>
-      <form method="post" action="/logout" class="topbar-logout">
-        <button type="submit" class="link-button">Sair</button>
-      </form>
+    <div class="topbar-right">
+      <span class="topbar-user">{{ user.email }}</span>
+      <form method="post" action="/logout"><button type="submit" class="link-button">Sair</button></form>
     </div>
     {% endif %}
   </header>

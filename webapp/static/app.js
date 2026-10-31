@@ -7,6 +7,11 @@
 
   // ---- Diagrama: selecionar nó --------------------------------------
   const ui = { selected: null, openHelp: new Set() };
+  function closePanels(arch) {
+    ui.selected = '';
+    arch.querySelectorAll('.dg-node').forEach((g) => g.classList.remove('is-selected'));
+    arch.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = true; });
+  }
 
   function selectNode(arch, key, scroll) {
     if (!arch) return;
@@ -20,14 +25,14 @@
       p.hidden = !match;
       if (match) shown = p;
     });
-    const hint = arch.querySelector('[data-node-hint]');
-    if (hint) hint.classList.toggle('hidden', !!key);
     if (scroll && shown) shown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function initArch(root) {
     (root || document).querySelectorAll('[data-arch]').forEach((arch) => {
-      const key = ui.selected || arch.dataset.defaultSelected;
+      // null = a pessoa ainda não escolheu (usa o padrão do servidor);
+      // '' = ela fechou o painel de propósito.
+      const key = ui.selected === null ? arch.dataset.defaultSelected : ui.selected;
       if (key) selectNode(arch, key, false);
     });
   }
@@ -35,7 +40,11 @@
   document.addEventListener('click', (ev) => {
     const node = ev.target.closest('.dg-node[data-node]');
     if (node && node.closest('[data-arch]').querySelector('[data-panel]')) {
-      selectNode(node.closest('[data-arch]'), node.dataset.node, true);
+      const arch = node.closest('[data-arch]');
+      const already = ui.selected === node.dataset.node
+        || (ui.selected === null && arch.dataset.defaultSelected === node.dataset.node);
+      if (already && !node.dataset.resource) closePanels(arch);
+      else selectNode(arch, node.dataset.node, true);
       return;
     }
     const focusBtn = ev.target.closest('[data-focus-node]');
@@ -93,7 +102,7 @@
     const idx = Math.round(((ev.clientX - rect.left) / rect.width) * (values.length - 1));
     const i = Math.max(0, Math.min(values.length - 1, idx));
     const ago = values.length - 1 - i;
-    tip.textContent = `${fmt(values[i], spark.dataset.unit)} · ${ago === 0 ? 'agora' : `${ago} leitura${ago > 1 ? 's' : ''} atrás`}`;
+    tip.textContent = `${fmt(values[i], spark.dataset.unit)} · ${ago === 0 ? 'agora' : `-${ago * 10}s`}`;
     tip.style.left = `${ev.clientX + 12}px`;
     tip.style.top = `${ev.clientY - 30}px`;
     tip.hidden = false;
@@ -128,7 +137,7 @@
       live.classList.remove('is-stale');
     } catch (e) {
       live.classList.add('is-stale');
-      if (updatedEl) updatedEl.textContent = 'sem conexão com o painel — tentando de novo…';
+      if (updatedEl) updatedEl.textContent = 'sem conexão · tentando de novo';
     } finally {
       inFlight = false;
     }
@@ -137,7 +146,7 @@
   function tickLabel() {
     if (!updatedEl || (live && live.classList.contains('is-stale'))) return;
     const s = Math.round((Date.now() - lastUpdate) / 1000);
-    updatedEl.textContent = s < 3 ? 'atualizado agora' : `atualizado há ${s}s`;
+    updatedEl.textContent = s < 3 ? 'ao vivo · agora' : `ao vivo · ${s}s`;
   }
 
   initArch(document);

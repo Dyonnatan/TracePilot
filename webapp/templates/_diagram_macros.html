@@ -1,155 +1,133 @@
 {#
-  Diagrama de arquitetura interativo — usado no resumo do onboarding, no
-  painel e (com dados ilustrativos) na landing page.
-
-  Recebe o `state` montado por `webapp/monitoring.py`. Cada nó é um botão
-  (clique/Enter) que abre o painel de detalhe correspondente logo abaixo;
-  o comportamento fica em /static/app.js (delegação de eventos, então
-  continua funcionando depois que o painel troca o HTML ao vivo).
+  Mapa do sistema, a partir do `state` de `webapp/monitoring.py`.
+  Interação (selecionar nó, ajuda, tendência, atualização ao vivo) em
+  /static/app.js, por delegação de eventos.
 #}
 
-{% macro status_pill(status, text) -%}
-<span class="status-pill st-{{ status }}"><span class="status-pill-icon" aria-hidden="true">{{ {'ok':'✓','warn':'!','down':'✕'}.get(status, '?') }}</span>{{ text }}</span>
+{% macro tag(status, text) -%}
+<span class="tag st-{{ status }}">{{ text }}</span>
 {%- endmacro %}
 
-{% macro _badge(x, y, node) %}
-  {% if node.status in ('warn', 'down') %}
-  <circle cx="{{ x }}" cy="{{ y }}" r="13" class="dg-pulse"></circle>
+{% macro _status_line(x, y, node) %}
+  <circle cx="{{ x + 4 }}" cy="{{ y - 4 }}" r="4" class="dg-dot"></circle>
+  <text x="{{ x + 14 }}" y="{{ y }}" class="dg-status">{{ node.status_text }}</text>
+{% endmacro %}
+
+{% macro _badge(x, y, status) %}
+  {% if status in ('warn', 'down') %}
+  <circle cx="{{ x }}" cy="{{ y }}" r="10" class="dg-pulse"></circle>
+  <circle cx="{{ x }}" cy="{{ y }}" r="10" class="dg-dot"></circle>
+  <text x="{{ x }}" y="{{ y + 4.5 }}" text-anchor="middle" style="font:700 13px var(--sans);fill:#0d0e10">{{ '!' if status == 'warn' else '✕' }}</text>
   {% endif %}
-  <circle cx="{{ x }}" cy="{{ y }}" r="12" class="dg-badge"></circle>
-  <text x="{{ x }}" y="{{ y + 4.5 }}" text-anchor="middle" class="dg-badge-icon">{{ node.status_icon }}</text>
+{% endmacro %}
+
+{% macro _node(key, n, x, y, w, h, icon, interactive) %}
+<g class="dg-node st-{{ n.status }}" data-node="{{ key }}" {% if interactive %}tabindex="0" role="button" aria-label="{{ n.title }}: {{ n.status_text }}"{% endif %}>
+  <rect x="{{ x }}" y="{{ y }}" width="{{ w }}" height="{{ h }}" rx="6" class="dg-box"></rect>
+  <use href="#ico-{{ icon }}" x="{{ x + 14 }}" y="{{ y + 15 }}" width="20" height="20" class="dg-ico"></use>
+  <text x="{{ x + 42 }}" y="{{ y + 30 }}" class="dg-title">{{ n.title }}</text>
+  <text x="{{ x + 14 }}" y="{{ y + 54 }}" class="dg-sub" {% if (n.subtitle or '') | length > 16 and w < 160 %}style="font-size:10.5px"{% endif %}>{{ (n.subtitle or '') | truncate(20 if w < 160 else 22, True, '…') }}</text>
+  {{ _status_line(x + 14, y + 78, n) }}
+  {{ _badge(x + w - 2, y + 2, n.status) }}
+</g>
 {% endmacro %}
 
 {% macro architecture_diagram(state, interactive=True, show_panels=True, selected=None) %}
 {% set n = state.nodes %}
-{% set res = state.resources %}
 {% if selected is none %}
   {% set ns = namespace(sel='') %}
-  {% for key in ['webapp', 'infra', 'tracepilot', 'database', 'users'] %}
-    {% if not ns.sel and n[key].status == 'down' %}{% set ns.sel = key %}{% endif %}
-  {% endfor %}
-  {% for key in ['webapp', 'infra', 'tracepilot', 'database', 'users'] %}
-    {% if not ns.sel and n[key].status == 'warn' %}{% set ns.sel = key %}{% endif %}
+  {% for level in ['down', 'warn'] %}
+    {% for key in ['webapp', 'infra', 'tracepilot', 'database', 'users'] %}
+      {% if not ns.sel and n[key].status == level %}{% set ns.sel = key %}{% endif %}
+    {% endfor %}
   {% endfor %}
   {% set selected = ns.sel %}
 {% endif %}
+{% set flowing = state.connection.status == 'ok' %}
 <div class="arch" data-arch data-default-selected="{{ selected }}">
   <div class="diagram-wrap">
-    <svg viewBox="0 0 800 390" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Mapa do sistema: usuários acessam o site, que usa o banco de dados, tudo rodando no servidor, observado pelo TracePilot">
+    <svg viewBox="0 0 800 372" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Mapa do sistema">
       <defs>
-        <marker id="dg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker id="dg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" class="dg-arrowhead"></path>
         </marker>
+        <symbol id="ico-users" viewBox="0 0 20 20"><circle cx="7.5" cy="6.5" r="3"/><path d="M2 17c0-3.2 2.5-5.5 5.5-5.5S13 13.8 13 17"/><circle cx="14.5" cy="7.5" r="2.3"/><path d="M14 11.6c2.4 0 4 1.9 4 4.4"/></symbol>
+        <symbol id="ico-app" viewBox="0 0 20 20"><rect x="2" y="3.5" width="16" height="13" rx="2"/><path d="M2 7.5h16M5 5.5h.01M7 5.5h.01"/></symbol>
+        <symbol id="ico-db" viewBox="0 0 20 20"><ellipse cx="10" cy="4.5" rx="7" ry="2.5"/><path d="M3 4.5v11c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-11M3 10c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></symbol>
+        <symbol id="ico-server" viewBox="0 0 20 20"><rect x="2.5" y="3" width="15" height="6" rx="1.5"/><rect x="2.5" y="11" width="15" height="6" rx="1.5"/><path d="M5.5 6h.01M5.5 14h.01"/></symbol>
+        <symbol id="ico-pilot" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/><path d="M4 10.8h2.8l1.6-4 2.8 7.2 1.6-3.2H16"/></symbol>
       </defs>
 
-      {# ---- Conexões (atrás dos nós) ---- #}
-      <path d="M146,195 C190,195 190,125 228,125" class="dg-link" marker-end="url(#dg-arrow)"></path>
-      <path d="M146,195 C190,195 190,125 228,125" class="dg-flow {{ 'is-stopped' if n.webapp.status == 'down' }}"></path>
-      <text x="172" y="232" class="dg-link-label" text-anchor="middle">acessam</text>
+      {# ligações #}
+      <path d="M150,191 C188,191 188,120 224,120" class="dg-link" marker-end="url(#dg-arrow)"></path>
+      <path d="M150,191 C188,191 188,120 224,120" class="dg-flow {{ 'is-stopped' if n.webapp.status == 'down' }}"></path>
+      <line x1="404" y1="120" x2="426" y2="120" class="dg-link" marker-end="url(#dg-arrow)"></line>
+      <line x1="624" y1="191" x2="658" y2="191" class="dg-link dg-link-dash" marker-end="url(#dg-arrow)"></line>
+      <line x1="624" y1="191" x2="658" y2="191" class="dg-flow {{ '' if flowing else 'is-stopped' }}"></line>
 
-      <line x1="400" y1="125" x2="428" y2="125" class="dg-link" marker-end="url(#dg-arrow)"></line>
-      <line x1="400" y1="125" x2="428" y2="125" class="dg-flow {{ 'is-stopped' if n.webapp.status == 'down' }}"></line>
-
-      <line x1="622" y1="195" x2="664" y2="195" class="dg-link dg-link-observe" marker-end="url(#dg-arrow)"></line>
-      <text x="643" y="232" class="dg-link-label" text-anchor="middle">observa</text>
-
-      {# ---- Servidor (infra envolvendo tudo) ---- #}
-      <g class="dg-node dg-infra st-{{ n.infra.status }}" data-node="infra" {% if interactive %}tabindex="0" role="button" aria-label="Servidor: {{ n.infra.status_text }}. Abrir detalhes"{% endif %}>
-        <rect x="200" y="22" width="422" height="350" rx="18" class="dg-infra-box"></rect>
-        <text x="222" y="50" class="dg-title">🧱 Servidor</text>
-        <text x="222" y="68" class="dg-sub">{{ (n.infra.subtitle or '') | truncate(34, True, '…') }}</text>
-        <text x="572" y="50" text-anchor="end" class="dg-status-text">{{ n.infra.status_text }}</text>
-        {{ _badge(600, 45, n.infra) }}
+      {# servidor #}
+      <g class="dg-node st-{{ n.infra.status }}" data-node="infra" {% if interactive %}tabindex="0" role="button" aria-label="Servidor: {{ n.infra.status_text }}"{% endif %}>
+        <rect x="196" y="18" width="428" height="344" rx="10" class="dg-infra-box"></rect>
+        <use href="#ico-server" x="214" y="32" width="20" height="20" class="dg-ico"></use>
+        <text x="242" y="47" class="dg-title">Servidor</text>
+        <text x="314" y="47" class="dg-sub">{{ (n.infra.subtitle or '') | truncate(24, True, '…') }}</text>
+        <circle cx="514" cy="43" r="4" class="dg-dot"></circle>
+        <text x="524" y="47" class="dg-status">{{ n.infra.status_text }}</text>
+        {{ _badge(622, 20, n.infra.status) }}
       </g>
 
-      {# ---- Site / Aplicação ---- #}
-      <g class="dg-node st-{{ n.webapp.status }}" data-node="webapp" {% if interactive %}tabindex="0" role="button" aria-label="Site / Aplicação: {{ n.webapp.status_text }}. Abrir detalhes"{% endif %}>
-        <rect x="228" y="82" width="172" height="90" rx="12" class="dg-box"></rect>
-        <text x="244" y="110" class="dg-title">🖥️ Site / App</text>
-        <text x="244" y="130" class="dg-sub">{{ (n.webapp.subtitle or '') | truncate(22, True, '…') }}</text>
-        <text x="244" y="155" class="dg-status-text">{{ n.webapp.status_text }}</text>
-        {{ _badge(396, 86, n.webapp) }}
-      </g>
+      {{ _node('webapp', n.webapp, 224, 74, 180, 92, 'app', interactive) }}
+      {{ _node('database', n.database, 428, 74, 172, 92, 'db', interactive) }}
 
-      {# ---- Banco de dados ---- #}
-      <g class="dg-node st-{{ n.database.status }}" data-node="database" {% if interactive %}tabindex="0" role="button" aria-label="Banco de dados: {{ n.database.status_text }}. Abrir detalhes"{% endif %}>
-        <rect x="428" y="82" width="170" height="90" rx="12" class="dg-box"></rect>
-        <text x="444" y="110" class="dg-title">🗄️ Banco de dados</text>
-        <text x="444" y="130" class="dg-sub">cadastros, pedidos…</text>
-        <text x="444" y="155" class="dg-status-text">{{ n.database.status_text }}</text>
-        {{ _badge(594, 86, n.database) }}
-      </g>
-
-      {# ---- Recursos do servidor (chips) ---- #}
-      <text x="228" y="206" class="dg-section-label">RECURSOS DA MÁQUINA</text>
-      {% for r in res %}
-      {% set cx = 228 + loop.index0 * 75 %}
-      <g class="dg-node dg-chip st-{{ r.status }}" data-node="infra" data-resource="{{ r.key }}" {% if interactive %}tabindex="0" role="button" aria-label="{{ r.label }}: {{ r.display }}"{% endif %}>
-        <rect x="{{ cx }}" y="216" width="67" height="134" rx="10" class="dg-box"></rect>
-        <text x="{{ cx + 33.5 }}" y="244" text-anchor="middle" class="dg-chip-icon">{{ r.icon }}</text>
-        <text x="{{ cx + 33.5 }}" y="266" text-anchor="middle" class="dg-chip-label">{{ {'cpu':'CPU','memory':'RAM','disk':'Disco','network':'Rede','gpu':'GPU'}[r.key] }}</text>
-        <text x="{{ cx + 33.5 }}" y="292" text-anchor="middle" class="dg-chip-value">{{ r.display if r.key != 'network' else (r.display | replace('/s','')) }}</text>
+      {# recursos #}
+      <text x="224" y="200" class="dg-section">RECURSOS</text>
+      {% for r in state.resources %}
+      {% set cx = 224 + loop.index0 * 77 %}
+      {% set val = r.display | replace('/s', '') %}
+      <g class="dg-node st-{{ r.status }}" data-node="infra" data-resource="{{ r.key }}" {% if interactive %}tabindex="0" role="button" aria-label="{{ r.label }}: {{ r.display }}"{% endif %}>
+        <rect x="{{ cx }}" y="212" width="68" height="126" rx="6" class="dg-box"></rect>
+        <text x="{{ cx + 11 }}" y="236" class="dg-chip-label">{{ r.short | upper }}</text>
+        <text x="{{ cx + 11 }}" y="266" class="dg-chip-value" {% if val | length > 5 %}style="font-size:13px"{% endif %}>{{ val }}</text>
         {% if r.percent is not none %}
-          <rect x="{{ cx + 10 }}" y="312" width="47" height="6" rx="3" class="dg-meter-track"></rect>
-          <rect x="{{ cx + 10 }}" y="312" width="{{ [r.percent, 2] | max * 0.47 }}" height="6" rx="3" class="dg-meter-fill"></rect>
-        {% elif r.key == 'network' and r.percent is none and r.display != '—' %}
-          <text x="{{ cx + 33.5 }}" y="318" text-anchor="middle" class="dg-sub">por segundo</text>
+        <rect x="{{ cx + 11 }}" y="284" width="46" height="4" rx="2" class="dg-track"></rect>
+        <rect x="{{ cx + 11 }}" y="284" width="{{ ([r.percent, 3] | max) * 0.46 }}" height="4" rx="2" class="dg-fill"></rect>
+        {% elif r.key == 'network' and val != '—' %}
+        <text x="{{ cx + 11 }}" y="289" class="dg-chip-detail">por seg.</text>
         {% endif %}
-        <text x="{{ cx + 33.5 }}" y="338" text-anchor="middle" class="dg-chip-status">{{ {'ok':'✓ ok','warn':'! atenção','down':'✕ crítico'}.get(r.status, '? sem dado') }}</text>
+        <circle cx="{{ cx + 15 }}" cy="318" r="3.5" class="dg-dot"></circle>
+        <text x="{{ cx + 23 }}" y="322" class="dg-chip-detail" style="fill:var(--st)">{{ {'ok':'OK','warn':'ATENÇÃO','down':'CRÍTICO'}.get(r.status, 'S/ DADO') }}</text>
       </g>
       {% endfor %}
 
-      {# ---- Usuários ---- #}
-      <g class="dg-node st-{{ n.users.status }}" data-node="users" {% if interactive %}tabindex="0" role="button" aria-label="Usuários: {{ n.users.status_text }}. Abrir detalhes"{% endif %}>
-        <rect x="10" y="150" width="136" height="90" rx="12" class="dg-box"></rect>
-        <text x="24" y="178" class="dg-title">👥 Usuários</text>
-        <text x="24" y="198" class="dg-sub">quem usa o sistema</text>
-        <text x="24" y="222" class="dg-status-text">{{ n.users.status_text }}</text>
-        {{ _badge(142, 154, n.users) }}
-      </g>
-
-      {# ---- TracePilot ---- #}
-      <g class="dg-node st-{{ n.tracepilot.status }}" data-node="tracepilot" {% if interactive %}tabindex="0" role="button" aria-label="TracePilot: {{ n.tracepilot.status_text }}. Abrir detalhes"{% endif %}>
-        <rect x="664" y="150" width="126" height="90" rx="12" class="dg-box dg-box-accent"></rect>
-        <text x="676" y="178" class="dg-title">🛰️ TracePilot</text>
-        <text x="676" y="198" class="dg-sub">guarda e investiga</text>
-        <text x="676" y="222" class="dg-status-text">{{ n.tracepilot.status_text }}</text>
-        {{ _badge(786, 154, n.tracepilot) }}
-      </g>
+      {{ _node('users', n.users, 10, 145, 140, 92, 'users', interactive) }}
+      {{ _node('tracepilot', n.tracepilot, 658, 145, 136, 92, 'pilot', interactive) }}
     </svg>
   </div>
 
-  <div class="dg-legend" aria-hidden="true">
-    {{ status_pill('ok', 'funcionando') }}
-    {{ status_pill('warn', 'atenção: pode virar problema') }}
-    {{ status_pill('down', 'problema agora') }}
-    {{ status_pill('unknown', 'sem dados') }}
+  <div class="dg-legend">
+    {{ tag('ok', 'normal') }}{{ tag('warn', 'atenção') }}{{ tag('down', 'problema') }}{{ tag('unknown', 'sem dados') }}
   </div>
 
   {% if show_panels %}
-  <div class="node-panels">
-    <p class="node-hint {{ 'hidden' if selected }}" data-node-hint>👆 Clique em qualquer item do mapa para ver o que ele é e como está.</p>
-    {% for key in ['users', 'webapp', 'database', 'infra', 'tracepilot'] %}
-    {% set node = n[key] %}
-    <section class="node-panel st-{{ node.status }}" data-panel="{{ key }}" {{ '' if key == selected else 'hidden' }}>
-      <header class="node-panel-head">
-        <h3>{{ node.icon }} {{ node.title }}{% if node.subtitle %} <span class="muted">— {{ node.subtitle }}</span>{% endif %}</h3>
-        {{ status_pill(node.status, node.status_text) }}
-      </header>
-      <p class="node-what"><strong>O que é isso?</strong> {{ node.what }}</p>
-      <ul class="node-facts">
-        {% for f in node.facts %}<li>{{ f }}</li>{% endfor %}
-      </ul>
-      {% for a in state.alerts if a.node == key %}
-      <div class="node-alert lvl-{{ a.level }}">
-        <strong>{{ {'down':'✕','warn':'!','info':'i'}[a.level] }} {{ a.title }}</strong>
-        <p>{{ a.plain }}</p>
-        <p class="node-alert-action"><strong>O que fazer:</strong> {{ a.action }}</p>
-      </div>
-      {% endfor %}
-    </section>
+  {% for key in ['users', 'webapp', 'database', 'infra', 'tracepilot'] %}
+  {% set node = n[key] %}
+  <section class="node-panel" data-panel="{{ key }}" {{ '' if key == selected else 'hidden' }}>
+    <div class="node-panel-head">
+      <h3>{{ node.title }}</h3>
+      {{ tag(node.status, node.status_text) }}
+    </div>
+    <p class="node-what">{{ node.what }}</p>
+    {% if node.facts %}
+    <dl class="kv">{% for k, v in node.facts %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl>
+    {% endif %}
+    {% for a in state.alerts if a.node == key %}
+    <div class="alert-row lvl-{{ a.level }}">
+      <span class="dot"></span>
+      <div class="alert-body"><strong>{{ a.title }}</strong><p>{{ a.action }}</p></div>
+    </div>
     {% endfor %}
-  </div>
+  </section>
+  {% endfor %}
   {% endif %}
 </div>
 {% endmacro %}
@@ -157,33 +135,28 @@
 {% macro resource_tiles(resources) %}
 <div class="tiles">
   {% for r in resources %}
-  <article class="tile st-{{ r.status }}" data-tile="{{ r.key }}">
-    <header class="tile-head">
-      <span class="tile-label">{{ r.icon }} {{ r.label }}</span>
+  <article class="tile st-{{ r.status }}">
+    <div class="tile-head">
+      <span class="label">{{ r.label }}</span>
       <button type="button" class="help-btn" data-help="{{ r.key }}" aria-expanded="false" aria-label="O que é {{ r.label }}?">?</button>
-    </header>
+    </div>
+    <p class="tile-help" data-help-text="{{ r.key }}" hidden>{{ r.explain }}</p>
     <div class="tile-value">{{ r.display }}</div>
     {% if r.percent is not none %}
-    <div class="meter" role="img" aria-label="{{ r.label }} em {{ r.display }}; atenção a partir de {{ r.thresholds[0] }}%">
-      <div class="meter-fill" style="width: {{ [r.percent, 100] | min }}%"></div>
-      <div class="meter-mark" style="left: {{ r.thresholds[0] }}%" title="limite de atenção ({{ r.thresholds[0] }}%)"></div>
-    </div>
+    <div class="meter" title="atenção a partir de {{ r.thresholds[0] }}%"><div class="meter-fill" style="width: {{ [r.percent, 100] | min }}%"></div><div class="meter-mark" style="left: {{ r.thresholds[0] }}%"></div></div>
     {% endif %}
     <div class="tile-detail">{{ r.detail }}</div>
     {% if r.history | length > 1 %}
     {% set hmax = [r.history | max, (100 if r.percent is not none else 0.0001)] | max %}
     {% set step = 100 / (r.history | length - 1) %}
-    <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" data-values="{{ r.history | map('round', 1) | join(',') }}" data-unit="{{ '%' if r.percent is not none else 'B/s' }}" aria-label="Tendência das últimas {{ r.history | length }} leituras">
-      <polyline points="{% for v in r.history %}{{ (loop.index0 * step) | round(2) }},{{ (28 - v / hmax * 26) | round(2) }} {% endfor %}" class="spark-line"></polyline>
+    <svg class="spark" viewBox="0 0 100 28" preserveAspectRatio="none" data-values="{{ r.history | map('round', 1) | join(',') }}" data-unit="{{ '%' if r.percent is not none else 'B/s' }}" aria-hidden="true">
+      <polyline points="{% for v in r.history %}{{ (loop.index0 * step) | round(2) }},{{ (26 - v / hmax * 24) | round(2) }} {% endfor %}" class="spark-line"></polyline>
     </svg>
-    {% else %}
-    <div class="spark-empty">tendência aparece após algumas leituras</div>
-    {% endif %}
-    <footer class="tile-foot">
-      {{ status_pill(r.status, {'ok':'normal','warn':'atenção','down':'crítico'}.get(r.status, 'sem dado')) }}
+    {% else %}<div class="spark-empty"></div>{% endif %}
+    <div class="tile-foot">
+      {{ tag(r.status, {'ok':'normal','warn':'atenção','down':'crítico'}.get(r.status, 'sem dados')) }}
       <span class="tile-source">{{ r.source_text }}</span>
-    </footer>
-    <p class="tile-help" data-help-text="{{ r.key }}" hidden>{{ r.explain }}{% if r.thresholds %} <br><strong>Quando se preocupar:</strong> acima de {{ r.thresholds[0] }}% vale ficar de olho; acima de {{ r.thresholds[1] }}% começam as falhas.{% endif %}</p>
+    </div>
   </article>
   {% endfor %}
 </div>

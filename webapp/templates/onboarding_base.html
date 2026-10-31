@@ -1,19 +1,13 @@
 {% extends "base.html" %}
+{% block container_class %}container {{ 'narrow' if step_index != 6 }}{% endblock %}
 {% block content %}
-{% set steps = ["Bem-vindo", "Sobre o sistema", "Instalação", "Repositório", "Conexão", "Configurando", "Resumo"] %}
-<nav class="stepper">
-  {% for label in steps %}
-  <div class="stepper-item {{ 'active' if loop.index0 == step_index else ('done' if loop.index0 < step_index else '') }}">
-    <span class="stepper-dot">{{ '✓' if loop.index0 < step_index else loop.index }}</span>
-    <span class="stepper-label">{{ label }}</span>
-  </div>
-  {% endfor %}
-</nav>
-{% set preset = active_preset() %}
-{% if preset %}
-<div class="preset-banner">⚡ <span><b>Modo demonstração:</b> respostas já preenchidas para o {{ preset.label }}. É só ir avançando — dá para editar qualquer campo.</span></div>
-{% endif %}
-<div class="wizard-card">
-  {% block step %}{% endblock %}
+{% set steps = ["Início", "Sistema", "Instalação", "Repositório", "Conexão", "Análise", "Resumo"] %}
+<div class="steps" aria-hidden="true">
+  {% for label in steps %}<span class="{{ 'on' if loop.index0 == step_index else ('done' if loop.index0 < step_index) }}"></span>{% endfor %}
 </div>
+<div class="step-meta">
+  <span class="label">Passo {{ step_index + 1 }} de {{ steps | length }} · {{ steps[step_index] }}</span>
+  {% if active_preset() %}<span class="demo-flag">Demo · pré-preenchido</span>{% endif %}
+</div>
+{% block step %}{% endblock %}
 {% endblock %}

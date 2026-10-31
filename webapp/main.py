@@ -25,15 +25,14 @@ from agents.orchestrator import run_investigation
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.tools import resource_snapshot as resource_snapshot_tool
 from agents.tools import github_inspector
-from webapp import monitoring, presets
+from webapp import auth, monitoring, presets
 
 BASE_DIR = Path(__file__).resolve().parent
 DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8099")
 OPENOBSERVE_UI_URL = os.getenv("OPENOBSERVE_URL", "http://localhost:5080")
 MONITORED_SERVICE = os.getenv("MONITORED_SERVICE_NAME", "tracepilot-demo-app")
 
-COOKIE_NAME = "tp_name"
-COOKIE_EMAIL = "tp_email"
+COOKIE_SESSION = "tp_session"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 dias
 
 app = FastAPI(title="TracePilot")
@@ -52,10 +51,7 @@ templates.env.filters["format_bytes"] = monitoring.format_bytes
 
 
 def _current_user(request: Request) -> dict | None:
-    email = request.cookies.get(COOKIE_EMAIL)
-    if not email:
-        return None
-    return {"name": request.cookies.get(COOKIE_NAME, ""), "email": email}
+    return auth.user_from_token(request.cookies.get(COOKIE_SESSION))
 
 
 templates.env.globals["current_user"] = _current_user
@@ -132,17 +128,15 @@ def _openobserve_status() -> dict:
 
 
 DEV_METHOD_LABELS = {
-    "ai_assisted": "Vibe coding / com ajuda de IA",
-    "no_code": "Plataforma no-code / low-code",
-    "traditional": "Desenvolvimento tradicional",
-    "other": "Outro",
+    "ai_assisted": "Com IA",
+    "no_code": "No-code",
+    "traditional": "Programado à mão",
 }
 ENVIRONMENT_LABELS = {
+    "local_server": "Meu computador",
+    "vps": "VPS / nuvem",
+    "dedicated_server": "Servidor próprio",
     "not_deployed": "Ainda não publicado",
-    "local_server": "Servidor local",
-    "dedicated_server": "Servidor dedicado",
-    "vps": "VPS (nuvem)",
-    "production": "Já em produção",
 }
 
 def _recent_error_count() -> int | None:
@@ -178,7 +172,17 @@ def _collect_state(snapshot: dict | None = None) -> dict:
         snapshot=snapshot,
         agent_reporting=resource_snapshot_tool.agent_is_reporting(snapshot),
         recent_errors=_recent_error_count() if openobserve["up"] else None,
+        sources=_telemetry_sources() if openobserve["up"] else None,
     )
+
+
+def _telemetry_sources() -> dict | None:
+    try:
+        return OpenObserveClient().recent_sources(
+            _monitored_services(), minutes=monitoring.RECENT_ERRORS_WINDOW_MIN
+        )
+    except Exception:
+        return None
 
 
 @app.get("/onboarding")
@@ -222,9 +226,7 @@ def onboarding_about_submit(
     system_name: str = Form(...),
     objective: str = Form(""),
     dev_method: str = Form(""),
-    dev_method_tool: str = Form(""),
     environment: str = Form(""),
-    environment_notes: str = Form(""),
     app_url: str = Form(""),
     service_name: str = Form(""),
 ):
@@ -235,9 +237,7 @@ def onboarding_about_submit(
         system_name=system_name.strip(),
         objective=objective.strip(),
         dev_method=dev_method,
-        dev_method_tool=dev_method_tool.strip(),
         environment=environment,
-        environment_notes=environment_notes.strip(),
         app_url=app_url.strip().rstrip("/") or None,
         service_name=service_name.strip() or None,
     )
@@ -301,16 +301,8 @@ def onboarding_connectivity(request: Request):
     if guard:
         return guard
     workspace_store.set_current_step("connectivity")
-    snapshot = resource_snapshot_tool.get_resource_snapshot()
     return templates.TemplateResponse(
-        request,
-        "onboarding_connectivity.html",
-        {
-            "step_index": 4,
-            "demo_app": _demo_app_status(),
-            "openobserve": _openobserve_status(),
-            "agent_reporting": resource_snapshot_tool.agent_is_reporting(snapshot),
-        },
+        request, "onboarding_connectivity.html", {"step_index": 4, "state": _collect_state()}
     )
 
 
@@ -383,36 +375,52 @@ def login_form(request: Request):
     if _current_user(request) is not None:
         target = "/dashboard" if workspace_store.is_onboarded() else "/onboarding"
         return RedirectResponse(url=target, status_code=303)
+    return templates.TemplateResponse(request, "login.html", _login_context())
+
+
+def _login_context(email: str | None = None, error: str | None = None) -> dict:
+    """Preenche o login no modo demo: e-mail do perfil (ou do preset) e,
+    se a conta ainda não tem senha ou é a conta do preset, a senha do
+    preset — assim a demo é só clicar em Entrar."""
     profile_user = workspace_store.load().get("user") or {}
     preset_user = (presets.active() or {}).get("user") or {}
-    return templates.TemplateResponse(
-        request,
-        "login.html",
-        {
-            "prefill_name": profile_user.get("name") or preset_user.get("name", ""),
-            "prefill_email": profile_user.get("email") or preset_user.get("email", ""),
-        },
-    )
+    prefill_email = email or profile_user.get("email") or preset_user.get("email", "")
+    prefill_password = ""
+    if preset_user.get("password") and not error and (
+        not auth.has_account() or prefill_email == preset_user.get("email")
+    ):
+        prefill_password = preset_user["password"]
+    return {
+        "prefill_email": prefill_email,
+        "prefill_password": prefill_password,
+        "first_access": not auth.has_account(),
+        "error": error,
+    }
 
 
 @app.post("/login")
-def login_submit(name: str = Form(...), email: str = Form(...)):
-    name, email = name.strip(), email.strip()
-    if not name or not email:
-        return RedirectResponse(url="/login", status_code=303)
-    workspace_store.update(user={"name": name, "email": email})
+def login_submit(request: Request, email: str = Form(...), password: str = Form(...)):
+    user = auth.authenticate(email, password)
+    if user is None:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            _login_context(email=email.strip(), error="E-mail ou senha incorretos."),
+            status_code=401,
+        )
     target = "/dashboard" if workspace_store.is_onboarded() else "/onboarding"
     response = RedirectResponse(url=target, status_code=303)
-    response.set_cookie(COOKIE_NAME, name, max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax")
-    response.set_cookie(COOKIE_EMAIL, email, max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax")
+    response.set_cookie(
+        COOKIE_SESSION, auth.session_token(user["email"]),
+        max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax",
+    )
     return response
 
 
 @app.post("/logout")
 def logout():
     response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie(COOKIE_NAME)
-    response.delete_cookie(COOKIE_EMAIL)
+    response.delete_cookie(COOKIE_SESSION)
     return response
 
 

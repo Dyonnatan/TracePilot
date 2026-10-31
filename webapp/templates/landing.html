@@ -1,128 +1,64 @@
 {% extends "base_marketing.html" %}
-{% from "_diagram_macros.html" import architecture_diagram %}
-{% block title %}TracePilot — seu sistema monitorado, explicado em português{% endblock %}
+{% from "_diagram_macros.html" import architecture_diagram, tag %}
+{% block title %}TracePilot · monitoramento que explica{% endblock %}
 {% block content %}
+<div class="landing">
 
 <section class="hero">
-  <span class="hero-kicker">Para quem criou um sistema — com ou sem IA — e não é especialista em servidores</span>
-  <h1 class="hero-title">Quando seu sistema quebrar,<br>a gente te diz <span class="accent-text">o porquê</span>.</h1>
-  <p class="hero-subtitle">O TracePilot vigia o seu site e o servidor onde ele roda, avisa
-  <b>antes</b> que um problema aconteça e, quando algo dá errado, agentes de IA investigam
-  e respondem em português claro: a causa, o que fazer — e um prompt pronto para a sua IA corrigir.</p>
-  <div class="hero-ctas">
-    {% if user %}
-    <a href="/dashboard" class="btn-lg">Ir para o painel →</a>
-    {% else %}
-    <a href="/login" class="btn-lg">Entrar e começar →</a>
-    {% endif %}
-    <a href="#como-funciona" class="btn-ghost">Como funciona</a>
+  <div>
+    <span class="label">Monitoramento + investigação por IA</span>
+    <h1 style="margin-top:1rem">Seu sistema caiu.<br><span>A gente diz por quê.</span></h1>
   </div>
-  <p class="hero-note">Configuração em ~5 minutos · sem cartão · agente leve de ~2 MB</p>
-</section>
-
-<section class="hero-diagram">
-  <div class="hero-frame">
-    <div class="hero-frame-bar">
-      <span></span><span></span><span></span>
-      <em>Exemplo ilustrativo — "Loja da Ana"</em>
+  <div>
+    <p>O TracePilot vigia o seu site e o servidor, avisa antes de quebrar e, quando quebra, explica a causa em português.</p>
+    <div class="actions">
+      {% if user %}<a href="/dashboard" class="btn btn-lg">Abrir painel</a>
+      {% else %}<a href="/login" class="btn btn-lg">Começar</a>{% endif %}
+      <a href="#como-funciona" class="btn btn-line btn-lg">Como funciona</a>
     </div>
-    {{ architecture_diagram(example, interactive=True, show_panels=True) }}
   </div>
-  <p class="muted small center">Isso é o que você vê no painel: cada parte do seu sistema, com
-  um aviso amarelo quando algo <i>pode</i> virar problema e vermelho quando já virou. Clique nas caixas.</p>
 </section>
 
-<section class="before-after">
-  <h2>Do erro técnico para uma resposta que você entende</h2>
-  <div class="ba-grid">
-    <div class="ba-card ba-before">
-      <span class="ba-tag">Sem o TracePilot</span>
+<section class="showcase">
+  <div class="showcase-head"><span class="label">Exemplo · Loja da Ana</span><span class="label">clique nas caixas</span></div>
+  {{ architecture_diagram(example, interactive=True, show_panels=True) }}
+</section>
+
+<section class="band">
+  <span class="label">Antes e depois</span>
+  <div class="compare">
+    <div>
+      <span class="label">O que o servidor mostra</span>
       <pre>ERROR 500 POST /checkout
 Traceback (most recent call last):
   File "main.py", line 88, in checkout
     preco_unitario_efetivo = payload.budget / payload.quantity
 ZeroDivisionError: division by zero</pre>
-      <p>…e você tentando descobrir o que isso significa às 23h de sexta.</p>
     </div>
-    <div class="ba-card ba-after">
-      <span class="ba-tag">Com o TracePilot</span>
-      <p class="ba-status">✓ Causa encontrada</p>
-      <p class="ba-cause">O checkout quebra quando o cliente envia o pedido com quantidade zero:
-      o sistema tenta dividir o valor por zero.</p>
-      <p><b>O que fazer:</b> não deixar a quantidade ser zero no formulário e tratar esse caso no backend.</p>
-      <p class="ba-prompt">📋 <b>Prompt pronto para sua IA:</b> "No endpoint /checkout, valide que quantity &gt; 0 antes de calcular o preço unitário…"</p>
+    <div>
+      <span class="label">O que o TracePilot responde</span>
+      <p class="answer">O checkout quebra quando o pedido chega com quantidade zero.</p>
+      <p class="muted" style="margin:0">Bloqueie quantidade zero no formulário e trate esse caso no backend.</p>
+      {{ tag('ok', 'causa confirmada') }}
     </div>
   </div>
 </section>
 
-<section class="feature-grid">
-  <div class="feature-card">
-    <span class="feature-icon">👀</span>
-    <h3>Monitora 24 horas</h3>
-    <p>Acompanha se o site está no ar, a velocidade de resposta, erros, e o uso de CPU,
-    memória, disco e rede do servidor — continuamente.</p>
-  </div>
-  <div class="feature-card">
-    <span class="feature-icon">⏰</span>
-    <h3>Avisa antes de quebrar</h3>
-    <p>Disco quase cheio? Memória subindo? Você recebe um aviso de atenção enquanto
-    ainda dá tempo de agir — não depois que os clientes reclamam.</p>
-  </div>
-  <div class="feature-card">
-    <span class="feature-icon">🤖</span>
-    <h3>Investiga com IA</h3>
-    <p>Descreva o problema com suas palavras ("o cliente não consegue pagar"). Agentes de IA
-    cruzam registros, métricas e rastros e checam a própria resposta antes de te mostrar.</p>
-  </div>
-  <div class="feature-card">
-    <span class="feature-icon">🗣️</span>
-    <h3>Fala a sua língua</h3>
-    <p>Nada de jargão: cada número tem um "?" com explicação simples, e cada alerta diz
-    o que fazer. O detalhe técnico fica disponível para quem quiser.</p>
+<section class="band" id="como-funciona">
+  <span class="label">Como funciona</span>
+  <div class="pillars">
+    <div><span class="label">01</span><h3>Conecte</h3><p>Responda quatro perguntas e instale um agente leve.</p></div>
+    <div><span class="label">02</span><h3>Acompanhe</h3><p>Site, servidor e erros num mapa só, ao vivo.</p></div>
+    <div><span class="label">03</span><h3>Investigue</h3><p>Descreva o problema. A IA cruza os dados e traz a causa e a correção.</p></div>
   </div>
 </section>
 
-<section class="how-it-works" id="como-funciona">
-  <h2>Como funciona</h2>
-  <div class="steps-row">
-    <div class="step-pill">
-      <span class="step-number">1</span>
-      <h3>Conte sobre o sistema</h3>
-      <p>Nome, para que serve, como foi feito (Cursor, Lovable, Claude Code…) e onde roda.</p>
-    </div>
-    <div class="step-pill">
-      <span class="step-number">2</span>
-      <h3>Instale o agente</h3>
-      <p>Um programinha leve no servidor, com um comando. Ele só lê uso de recursos.</p>
-    </div>
-    <div class="step-pill">
-      <span class="step-number">3</span>
-      <h3>Conecte o repositório</h3>
-      <p>Opcional: com o link do GitHub, o TracePilot identifica as tecnologias usadas.</p>
-    </div>
-    <div class="step-pill">
-      <span class="step-number">4</span>
-      <h3>Acompanhe e investigue</h3>
-      <p>O painel mostra tudo ao vivo; quando algo der errado, a IA investiga para você.</p>
-    </div>
-  </div>
+<section class="cta-final">
+  <h2>Pronto para começar?</h2>
+  {% if user %}<a href="/dashboard" class="btn btn-lg">Abrir painel</a>
+  {% else %}<a href="/login" class="btn btn-lg">Começar</a>{% endif %}
 </section>
 
-<section class="trust-strip">
-  <div>🔒 <b>Privacidade:</b> o agente nunca lê conteúdo de arquivos, senhas ou o que é digitado — só números de uso de recursos.</div>
-  <div>🪶 <b>Leve:</b> feito em Rust, usa pouquíssima memória e CPU no seu servidor.</div>
-  <div>🧩 <b>Padrão aberto:</b> usa OpenTelemetry — os dados são seus e não ficam presos ao TracePilot.</div>
-</section>
-
-<section class="cta-band">
-  <h2>Pronto para dormir tranquilo?</h2>
-  <p>Comece em poucos minutos. Você não precisa saber o que é um "log".</p>
-  {% if user %}
-  <a href="/dashboard" class="btn-lg">Ir para o painel →</a>
-  {% else %}
-  <a href="/login" class="btn-lg">Entrar e começar →</a>
-  {% endif %}
-</section>
-
+</div>
 <script src="/static/app.js"></script>
 {% endblock %}
