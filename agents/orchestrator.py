@@ -18,8 +18,9 @@ from agents.llm import get_provider
 from agents.llm.decision_provider import DecisionProvider
 from agents.tools.openobserve_client import OpenObserveClient
 from agents.specialists import logs_agent, metrics_agent, traces_agent
-from agents import diagnosis_agent, verifier_agent
+from agents import diagnosis_agent, verifier_agent, plain_summary_agent
 from agents.report import build_report
+from agents.fix_prompt import build_fix_prompt
 from agents import report_store
 
 
@@ -41,6 +42,9 @@ class IncidentState(TypedDict, total=False):
     verification_notes: str
     decision_model_confidence: float | None
     decision_model_error: str
+    plain_cause: str
+    plain_actions: list
+    fix_prompt: str
     report: str
 
 
@@ -52,6 +56,7 @@ def orchestrator_node(state: IncidentState) -> IncidentState:
 
 
 def report_node(state: IncidentState) -> IncidentState:
+    state = {**state, "fix_prompt": build_fix_prompt(state)}
     return {**state, "report": build_report(state)}
 
 
@@ -68,6 +73,7 @@ def build_graph() -> StateGraph:
     graph.add_node("traces_agent", lambda s: traces_agent.run(s, llm, client))
     graph.add_node("diagnosis_agent", lambda s: diagnosis_agent.run(s, llm))
     graph.add_node("verifier_agent", lambda s: verifier_agent.run(s, llm, decision))
+    graph.add_node("plain_summary_agent", lambda s: plain_summary_agent.run(s, llm))
     graph.add_node("report", report_node)
 
     graph.set_entry_point("orchestrator")
@@ -80,7 +86,8 @@ def build_graph() -> StateGraph:
     graph.add_edge("metrics_agent", "traces_agent")
     graph.add_edge("traces_agent", "diagnosis_agent")
     graph.add_edge("diagnosis_agent", "verifier_agent")
-    graph.add_edge("verifier_agent", "report")
+    graph.add_edge("verifier_agent", "plain_summary_agent")
+    graph.add_edge("plain_summary_agent", "report")
     graph.add_edge("report", END)
 
     return graph.compile()

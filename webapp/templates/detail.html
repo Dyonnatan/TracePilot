@@ -22,30 +22,50 @@
   </section>
 
 {% else %}
-  <section class="panel">
-    <h2>
-      {% if investigation.verified %}✅ Diagnóstico sustentado por evidência
-      {% else %}⚠️ Evidência insuficiente — tratar como hipótese{% endif %}
-    </h2>
-    <p class="muted">{{ investigation.error_report }} — serviço: {{ investigation.service }}</p>
+
+  {# ---- Resumo de decisão: o que a pessoa vê primeiro, em segundos ---- #}
+  <section class="decision-card {{ 'ok' if investigation.verified else 'warn' }}">
+    <div class="decision-status">
+      {% if investigation.verified %}✅ Causa encontrada{% else %}⚠️ Ainda não temos certeza{% endif %}
+    </div>
+    <p class="decision-cause">{{ investigation.plain_cause }}</p>
+
+    {% if investigation.plain_actions %}
+    <div class="decision-actions">
+      <span class="decision-actions-label">O que fazer agora:</span>
+      <ul>
+        {% for action in investigation.plain_actions %}
+        <li>{{ action }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if investigation.fix_prompt %}
+    <div class="fix-prompt-box">
+      <div class="fix-prompt-header">
+        <span>📋 Prompt pronto para colar na IA que vai corrigir</span>
+        <button type="button" class="copy-btn" data-copy-target="fix-prompt-text">Copiar</button>
+      </div>
+      <textarea id="fix-prompt-text" readonly>{{ investigation.fix_prompt }}</textarea>
+    </div>
+    {% endif %}
   </section>
 
-  <section class="panel">
-    <h2>Causa provável</h2>
+  {# ---- Detalhe técnico: fica fechado, só quem quiser aprofunda ---- #}
+  <details class="panel tech-details">
+    <summary>🔍 Ver detalhes técnicos completos</summary>
+
+    <h3>Causa provável (diagnóstico técnico)</h3>
     <pre class="text-block">{{ investigation.hypotheses }}</pre>
-  </section>
 
-  <section class="panel">
-    <h2>Verificação</h2>
+    <h3>Verificação</h3>
     <pre class="text-block">{{ investigation.verification_notes }}</pre>
     {% if investigation.decision_model_confidence is not none %}
       <p class="muted">Checagem independente (Laya): {{ "%.0f"|format(investigation.decision_model_confidence * 100) }}% de confiança.</p>
     {% endif %}
-  </section>
 
-  <section class="panel drilldown">
-    <h2>Aprofundar na evidência</h2>
-
+    <h3>Evidência bruta</h3>
     <details open>
       <summary>📋 Logs — {{ investigation.evidence_logs | length }} registro(s)</summary>
       <p class="text-block">{{ investigation.logs_summary }}</p>
@@ -73,12 +93,10 @@
       </div>
       {% endfor %}
     </details>
-  </section>
 
-  <section class="panel">
-    <h2>Relatório completo</h2>
+    <h3>Relatório completo</h3>
     <pre class="text-block">{{ investigation.report }}</pre>
-  </section>
+  </details>
 {% endif %}
 
 <script>
@@ -92,5 +110,15 @@
       }
     }, 3000);
   }
+
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.dataset.copyTarget);
+      await navigator.clipboard.writeText(target.value);
+      const original = btn.textContent;
+      btn.textContent = 'Copiado ✓';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+  });
 </script>
 {% endblock %}

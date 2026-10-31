@@ -118,3 +118,85 @@ summary { cursor: pointer; font-weight: 600; }
 .sev-error { background: rgba(255,92,92,.2); color: var(--down); }
 .sev-warning, .sev-warn { background: rgba(245,180,0,.2); color: var(--warn); }
 .sev-info { background: rgba(91,140,255,.2); color: var(--accent); }
+
+/* ---- Resumo de decisão: o que importa, em destaque ---- */
+.decision-card {
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 1.25rem;
+  border: 2px solid var(--border);
+  background: var(--panel);
+}
+.decision-card.ok { border-color: var(--ok); background: linear-gradient(180deg, rgba(61,220,132,.08), var(--panel) 60%); }
+.decision-card.warn { border-color: var(--warn); background: linear-gradient(180deg, rgba(245,180,0,.08), var(--panel) 60%); }
+
+.decision-status {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: .6rem;
+}
+.decision-card.ok .decision-status { color: var(--ok); }
+.decision-card.warn .decision-status { color: var(--warn); }
+
+.decision-cause {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 1.1rem;
+}
+
+.decision-actions-label {
+  display: block;
+  font-size: .85rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin-bottom: .4rem;
+}
+.decision-actions ul { margin: 0; padding-left: 1.3rem; }
+.decision-actions li { font-size: 1.05rem; margin-bottom: .4rem; }
+
+.fix-prompt-box {
+  margin-top: 1.25rem;
+  background: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.fix-prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .6rem .9rem;
+  font-size: .85rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.fix-prompt-box textarea {
+  display: block;
+  width: 100%;
+  min-height: 90px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: .8rem;
+  padding: .75rem .9rem;
+  resize: vertical;
+}
+.copy-btn {
+  align-self: auto;
+  padding: .3rem .8rem;
+  font-size: .8rem;
+  font-weight: 600;
+  background: var(--accent);
+  border-radius: 6px;
+}
+
+/* ---- Detalhe técnico: colapsado, segundo plano ---- */
+.tech-details summary {
+  font-size: 1rem;
+  color: var(--muted);
+}
+.tech-details h3 { font-size: .95rem; margin: 1.1rem 0 .4rem; color: var(--muted); }
+.tech-details > summary { border-top: none; }
