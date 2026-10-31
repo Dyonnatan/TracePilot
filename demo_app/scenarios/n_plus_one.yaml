@@ -1,0 +1,36 @@
+name: n_plus_one
+title: Consultas N+1 no catálogo e no carrinho
+category: performance_antipattern
+culprit_component: shop-api (feature flag catalog_n_plus_one)
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: fault_flag
+  params:
+    target: shop
+    flag: catalog_n_plus_one
+
+user_symptom: >
+  A vitrine e o carrinho ficam visivelmente mais lentos para carregar, mas
+  continuam funcionando. Nenhuma mensagem de erro.
+
+expected_signals:
+  traces:
+    - GET /products passa de 1 span de banco para ~10 (um SELECT id seguido de um SELECT por produto), cada um com conexão nova.
+    - POST /cart/quote e POST /checkout fazem um SELECT por item do carrinho em vez de um WHERE id = ANY(...).
+  logs:
+    - shop-api loga "change.event" com change.type=feature_flag e change.flag=catalog_n_plus_one logo antes da piora.
+  metrics:
+    - Latência HTTP de GET /products e POST /cart/quote sobe; taxa de erro continua zero.
+    - Número de conexões/queries no Postgres por requisição aumenta.
+  database:
+    - pg_stat_statements/pg_stat_activity mostram muitas execuções curtas de SELECT ... FROM products WHERE id = $1.
+
+root_cause: >
+  A feature flag catalog_n_plus_one foi ligada no shop-api e trocou a
+  consulta em lote do catálogo por uma consulta (e uma conexão) por produto,
+  o anti-pattern N+1.
+
+red_herrings:
+  - O Postgres não está lento: cada query é rápida; o custo está na quantidade de idas e voltas.

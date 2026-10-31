@@ -1,0 +1,37 @@
+name: db_lock
+title: Lock exclusivo na tabela products do Postgres
+category: database
+culprit_component: postgres (tabela products)
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: pg_lock
+  params:
+    table: products
+    application_name: inventory-maintenance
+
+user_symptom: >
+  A vitrine e a página de produto não carregam; abrir o carrinho, aplicar
+  cupom e finalizar o pedido falham com "Não consegui concluir a operação"
+  depois de ~2 s de espera.
+
+expected_signals:
+  traces:
+    - Spans de banco (SELECT em products) do shop-api duram ~2000 ms e terminam com erro QueryCanceled, em GET /products, GET /products/{id}, POST /cart/quote e POST /checkout.
+  logs:
+    - shop-api loga "db.unavailable" com o erro "canceling statement due to statement timeout".
+  metrics:
+    - Latência HTTP de GET /products, GET /products/{id}, POST /cart/quote e POST /checkout sobe para ~2 s.
+    - shop.checkout.requests com outcome=db_unavailable aparece.
+    - CPU de todos os containers normal.
+  database:
+    - pg_stat_activity mostra uma sessão "idle in transaction" com application_name=inventory-maintenance segurando AccessExclusiveLock em products.
+
+root_cause: >
+  Uma transação de manutenção (application_name=inventory-maintenance) segura
+  um lock ACCESS EXCLUSIVE na tabela products. As consultas do shop-api ficam
+  bloqueadas até o statement_timeout de 2 s e são canceladas.
+
+red_herrings:
+  - Não é falta de recurso no Postgres nem erro de código: as queries estão bloqueadas esperando lock.

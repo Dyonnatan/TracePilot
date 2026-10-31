@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Headset com microfone">
+  <rect width="200" height="200" fill="#f5f5f4"/>
+  <ellipse cx="100" cy="172" rx="62" ry="5" fill="#e7e5e4"/>
+  <path d="M54 112a46 46 0 0 1 92 0" fill="none" stroke="#1c1917" stroke-width="10" stroke-linecap="round"/>
+  <rect x="38" y="100" width="30" height="48" rx="13" fill="#1c1917"/>
+  <rect x="132" y="100" width="30" height="48" rx="13" fill="#1c1917"/>
+  <rect x="60" y="108" width="10" height="32" rx="5" fill="#78716c"/>
+  <rect x="130" y="108" width="10" height="32" rx="5" fill="#78716c"/>
+  <path d="M53 146c4 14 16 22 32 22" fill="none" stroke="#78716c" stroke-width="4" stroke-linecap="round"/>
+  <rect x="84" y="161" width="16" height="12" rx="6" fill="#a16207"/>
+</svg>

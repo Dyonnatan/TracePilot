@@ -61,14 +61,15 @@ Detalhe módulo a módulo em [docs/code-architecture.md](docs/code-architecture.
 TracePilot/
 ├── agents/            # orquestrador LangGraph + agentes especialistas + providers de LLM
 ├── webapp/              # painel web (FastAPI) para monitorar e investigar
-├── demo_app/           # app FastAPI instrumentada, com falhas controladas
-├── local-agent/         # coletor instalável em Rust (recursos do SO), na máquina monitorada
-├── ingest/              # API de ingestão direta: a app manda log/span sem instalar nada
+├── demo_app/           # ambiente de referência multi-serviço + cenários de falha (demo do pitch)
+├── local-agent/         # agente leve em Rust (recursos do SO), instalado na máquina monitorada
 ├── benchmark/          # notas de avaliação (OpenRCA)
 ├── reports/             # investigações persistidas (JSON)
 ├── docs/                 # arquitetura geral, de código e glossário de conceitos
 ├── docker-compose.yml    # OpenObserve + OTel Collector
-└── otel-collector-config.yaml
+├── docker-compose.hostmetrics.yml  # override opt-in: métricas de host e containers
+├── otel-collector-config.yaml
+└── otel-collector-hostmetrics.yaml
 ```
 
 > O TracePilot é composto por dois sistemas: o **coletor instalável**
@@ -92,7 +93,9 @@ TracePilot/
 > (logs → métricas → traces → diagnóstico → verificação → relatório) roda
 > de ponta a ponta contra uma instância real do OpenObserve, com um
 > painel web pra disparar investigações e fazer drill-down na evidência.
-> Detalhe do que está implementado vs. pendente em `docs/code-architecture.md`.
+> O [ambiente de referência](demo_app/README.md) gera os incidentes e a
+> telemetria correlacionada que os agentes investigam. Detalhe do que está
+> implementado vs. pendente em `docs/code-architecture.md`.
 
 ## Demo completa (um comando)
 
@@ -126,9 +129,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Rodar a aplicação de teste instrumentada (outro terminal)
-cd demo_app && pip install -r requirements.txt
-uvicorn main:app --host 127.0.0.1 --port 8099
+# 3. Subir o ambiente de referência (loja + painel de falhas), ver abaixo
+(cd demo_app && make up)
 
 # 4. Configurar o .env (backend de LLM local via Ollama, por padrão)
 cp .env.example .env
@@ -136,18 +138,13 @@ ollama pull gemma3:4b
 
 # 5. Subir o painel web (outro terminal)
 uvicorn webapp.main:app --host 127.0.0.1 --port 8800
-# abra http://localhost:8800 — gere uma falha no demo_app e dispare a
-# investigação direto pelo formulário
+# abra http://localhost:8800 — ligue um cenário no Chaos Control
+# (http://localhost:8090), reproduza na loja e dispare a investigação
+# direto pelo formulário
 
-# 6. (opcional) Subir a API de ingestão direta, se for integrar uma app
-#     que não pode instalar o coletor (ver docs/ingestion-modes.md)
-uvicorn ingest.main:app --host 127.0.0.1 --port 8810
-# curl http://localhost:8810/v1/health
-# curl http://localhost:8810/v1/guide   # guia de integração, em markdown
-
-# (alternativa: CLI, sem o painel)
-python3 agents/orchestrator.py "checkout falhando com erro 500" \
-  --service tracepilot-demo-app
+# (alternativa: CLI, sem o painel; --service "" busca em todos os serviços)
+python3 agents/orchestrator.py "não consegui finalizar o pedido" \
+  --service shop-api
 ```
 
 > Ao reproduzir localmente em máquinas com pouca RAM: suba os serviços um
@@ -161,13 +158,24 @@ GTX 1650) e troque só `OLLAMA_MODEL` pra testar outro. Também dá pra usar
 a **OpenRouter** (`LLM_BACKEND=cloud`) se preferir backend em nuvem — ver
 [openrouter.ai/models](https://openrouter.ai/models) e `.env.example`.
 
+### Ambiente de referência (demo)
+
+```bash
+cd demo_app
+make up   # telemetria (com métricas de host) + loja multi-serviço + painel de falhas
+```
+
+Loja em <http://localhost:8088>, painel de falhas em <http://localhost:8090>
+e OpenObserve em <http://localhost:5080>. Roteiro da demo, cenários e
+gabaritos em [demo_app/README.md](demo_app/README.md).
+
 ## Roadmap
 
 1. Roteamento dinâmico no orquestrador (padrão Planejador-Executor — hoje
    o fluxo é linear fixo, ver `docs/code-architecture.md`).
-2. Construir o [ambiente de referência monitorado](docs/reference-environment.md)
-   (Docker, multi-serviço, com cenários de falha controlados) para dar
-   material realista às investigações.
+2. ~~Construir o [ambiente de referência monitorado](docs/reference-environment.md)
+   (Docker, multi-serviço, com cenários de falha controlados).~~ Primeira
+   versão em [demo_app/](demo_app/README.md): 11 cenários com gabarito.
 3. Avaliar com o benchmark aberto **OpenRCA**: LLM simples vs. agente único
    vs. multiagente, medindo acurácia, tempo, custo e fundamentação.
 4. Laboratório próprio: correlacionar ação do usuário → falha de backend →

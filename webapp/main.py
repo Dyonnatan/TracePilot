@@ -35,7 +35,7 @@ from agents.tools import traffic_guard
 from webapp import auth, monitoring, presets
 
 BASE_DIR = Path(__file__).resolve().parent
-DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8099")
+DEMO_APP_URL = os.getenv("DEMO_APP_URL", "http://localhost:8088")
 OPENOBSERVE_UI_URL = os.getenv("OPENOBSERVE_URL", "http://localhost:5080")
 MONITORED_SERVICE = os.getenv("MONITORED_SERVICE_NAME", "tracepilot-demo-app")
 # TracePilot API (ingest/): endereço interno para o health check e o
@@ -592,7 +592,7 @@ def dashboard_api(request: Request):
 def create_investigation(
     request: Request,
     error_report: str = Form(...),
-    service: str = Form(MONITORED_SERVICE),
+    service: str = Form(""),
 ):
     guard = _require_login(request)
     if guard:
@@ -602,7 +602,7 @@ def create_investigation(
         target=run_investigation,
         kwargs={
             "error_report": error_report,
-            "service": service,
+            "service": service.strip() or None,
             "investigation_id": investigation_id,
             "related_services": [s for s in _monitored_services() if s != service],
         },

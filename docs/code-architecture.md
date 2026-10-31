@@ -241,15 +241,32 @@ bloqueante para ter um MVP demonstrável, mas é o que falta para a
 arquitetura corresponder de fato ao padrão Planejador-Executor descrito em
 [glossario-conceitos-ia.md](glossario-conceitos-ia.md).
 
-## `demo_app/` — aplicação de teste instrumentada
+## `demo_app/` — ambiente de referência monitorado
 
-FastAPI com `FastAPIInstrumentor` (traces) **e exportação de logs via
-OTLP** (adicionado durante a implementação do MVP, para o `logs_agent` ter
-dado real — antes só exportava traces). O endpoint `POST /checkout` tem
-uma falha controlada **determinística** (`ZeroDivisionError` quando
-`quantity == 0`) com log de erro (`exc_info=True`, correlacionado por
-`trace_id`/`span_id`) e exceção registrada no span — essa é a falha
-"canário" que o MVP já consegue investigar de ponta a ponta.
+Loja multi-serviço em Python (`shop-api`, `payment-service`, Postgres,
+`toxiproxy` entre os serviços, `loadgen`) com seu próprio
+`docker-compose.yml`, exportando para o mesmo Collector da raiz pela rede
+Docker `tracepilot`. Guia de uso em
+[demo_app/README.md](../demo_app/README.md). Decisão de design: as falhas
+são **determinísticas** (ativadas por comando, nunca aleatórias) para que
+qualquer investigação, manual ou por agente, seja reproduzível e comparável
+entre execuções, essencial para o benchmark.
+
+| Peça | Decisão de design |
+|---|---|
+| `scenarios/*.yaml` | Fonte da verdade dos cenários: ativação, TTL, sinais esperados e causa raiz gabarito, para o benchmark comparar com o diagnóstico dos agentes. A tabela do README é gerada a partir deles. |
+| `chaos-control/` | Injeta as falhas (toxiproxy, lock no Postgres, CPU burn) **sem OpenTelemetry**: a injeção não pode aparecer na telemetria, senão entrega o gabarito aos agentes. Falhas têm TTL (padrão 120 s). |
+| `shop-api/` | Frontend com `session_id` e relato de problema (`user.report` com `trace_id`): é a entrada (`error_report`) que o orquestrador vai consumir. Deploy versionado (`SHOP_VERSION`) gera `change.event`, o histórico de mudanças legítimo. |
+| `payment-service/` | `/internal/*` (canal do chaos-control) excluído de traces e sem access log. |
+| `dashboards/` | Dashboard OpenObserve com o caminho de investigação manual — o trabalho que o TracePilot automatiza. |
+
+Os serviços exportam traces, logs (correlacionados por `trace_id`) e
+métricas via OTLP. O `coupon_bug` (`ZeroDivisionError` no deploy 1.1.0) é
+o equivalente da antiga falha "canário" do app de serviço único: erro
+determinístico com exceção no span e no log.
+
+Falta implementar: cenários de segurança (detecção OWASP), métricas do
+Postgres via receiver do Collector e uma versão poliglota de algum serviço.
 
 ## `ingest/` — API de ingestão direta (caminho sem instalador)
 
@@ -307,7 +324,13 @@ amarrar cada chave ao `service` que pode escrever.
 ## `docker-compose.yml` + `otel-collector-config.yaml`
 
 Sobe `openobserve` (armazenamento/consulta de telemetria) e
-`otel-collector` (recebe OTLP do `demo_app` e exporta para o OpenObserve).
+`otel-collector` (recebe OTLP do `demo_app` e exporta para
+o OpenObserve). A imagem do OpenObserve tem tag fixa porque o dashboard em
+`demo_app/dashboards/` depende do formato de import da versão. O
+override opt-in `docker-compose.hostmetrics.yml` +
+`otel-collector-hostmetrics.yaml` adiciona os receivers `host_metrics` e
+`docker_stats`; ele monta o socket do Docker (equivale a root no host) e por
+isso não faz parte da stack padrão.
 Decisão de design: credenciais do OpenObserve (`ZO_ROOT_USER_EMAIL/PASSWORD`)
 estão com um valor padrão fixo no compose — aceitável para ambiente de
 desenvolvimento local (e é o mesmo usuário/senha usado por
@@ -326,15 +349,20 @@ salvo em arquivo).
 ## Como rodar uma investigação
 
 ```bash
-docker compose up -d                 # sobe OpenObserve + OTel Collector
-cd demo_app && uvicorn main:app --reload &   # sobe a app de teste
-curl -X POST localhost:8000/checkout -H "Content-Type: application/json" \
-  -d '{"order_id":"1","quantity":0,"budget":700}'   # gera a falha
+(cd demo_app && make up && make deploy-bad)   # telemetria + loja; deploy com o coupon_bug
+curl -X POST localhost:8088/cart/quote -H "Content-Type: application/json" \
+  -d '{"items":[{"product_id":1,"quantity":1}],"coupon":"GRATIS100"}'   # gera a falha
 
-cp .env.example .env   # preencher OPENROUTER_API_KEY
-python3 agents/orchestrator.py "checkout falhando com erro 500" \
-  --service tracepilot-demo-app
+cp .env.example .env   # backend de LLM (local via Ollama, ou OPENROUTER_API_KEY)
+python3 agents/orchestrator.py "não consegui aplicar o cupom" --service shop-api
+(cd demo_app && make deploy-good)   # volta para a versão 1.0.0
 ```
+
+Os padrões apontam para o ambiente de referência: serviço `shop-api` e
+métrica `shop_checkout_requests`. `--service ""` busca em todos os
+serviços, útil quando a evidência está numa dependência (ex.:
+`payment-service` no cenário `payment_errors`). Os demais cenários são
+ligados pelo Chaos Control (<http://localhost:8090>).
 
 ## Próximos passos
 

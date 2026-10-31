@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Monitor 27 polegadas">
+  <rect width="200" height="200" fill="#f5f5f4"/>
+  <ellipse cx="100" cy="164" rx="46" ry="5" fill="#e7e5e4"/>
+  <rect x="20" y="34" width="160" height="98" rx="6" fill="#1c1917"/>
+  <rect x="26" y="40" width="148" height="82" rx="2" fill="#78716c"/>
+  <path d="M26 104 70 70l28 22 30-30 46 40v20H26z" fill="#44403c" opacity=".55"/>
+  <circle cx="100" cy="127" r="2.6" fill="#a16207"/>
+  <rect x="93" y="132" width="14" height="22" fill="#78716c"/>
+  <rect x="64" y="152" width="72" height="9" rx="4.5" fill="#1c1917"/>
+</svg>

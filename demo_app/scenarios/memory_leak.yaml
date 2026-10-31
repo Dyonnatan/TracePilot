@@ -1,0 +1,36 @@
+name: memory_leak
+title: Vazamento de memória em cache sem limite no shop-api
+category: performance_antipattern
+culprit_component: shop-api (feature flag product_cache_unbounded)
+pitch_role: extra
+ttl_seconds: 180
+
+activation:
+  driver: fault_flag
+  params:
+    target: shop
+    flag: product_cache_unbounded
+    config:
+      kb_per_request: 1024
+
+user_symptom: >
+  Nada visível no início. Com o tempo o shop-api fica mais lento e, se o
+  cenário ficar ligado tempo demais, o container pode ser encerrado por falta
+  de memória.
+
+expected_signals:
+  traces:
+    - Nenhuma mudança relevante na duração dos spans no início.
+  logs:
+    - shop-api loga "change.event" com change.type=feature_flag e change.flag=product_cache_unbounded.
+  metrics:
+    - process.memory.usage do shop-api cresce de forma linear (~1 MB por visita a vitrine ou produto) e não volta.
+    - Memória do container shop-api (docker_stats) sobe junto; os outros containers ficam estáveis.
+
+root_cause: >
+  A feature flag product_cache_unbounded ligou um cache de renderização de
+  produto sem limite e com chave por instante da requisição. Ele nunca tem
+  hit e só cresce, vazando memória a cada GET /products e GET /products/{id}.
+
+red_herrings:
+  - Latência e erros ainda normais no começo; o sinal está na memória, não nos traces.

@@ -3,9 +3,8 @@
 Os métodos abaixo foram escritos e validados contra uma instância local real
 (ver `docker-compose.yml`), gerando tráfego de sucesso/falha no `demo_app` e
 inspecionando o schema de fato ingerido — não são um "melhor palpite" sobre a
-API do OpenObserve. `query_logs` e `query_traces` usam os nomes de campo
-confirmados; `query_metrics` foi validado contra as métricas reais do
-`local-agent` (um stream por métrica — ver o método).
+API do OpenObserve. Os três métodos de consulta usam nomes de campo e
+streams confirmados contra o ambiente de referência do `demo_app`.
 
 Decisão de design: só métodos de leitura/consulta são expostos — os agentes
 nunca devem ter acesso de escrita/admin ao OpenObserve.
@@ -181,23 +180,20 @@ class OpenObserveClient:
         start_time: str | int | None = None,
         end_time: str | int | None = None,
         service: str | None = None,
-        stream: str | None = None,
         size: int = 50,
     ) -> list[dict]:
-        """Busca pontos de uma métrica. Validado contra dado real do
-        `local-agent`: o OpenObserve grava **cada métrica num stream
-        próprio**, com o nome trocando "." por "_" (ex.:
-        `system.cpu.usage_percent` → stream `system_cpu_usage_percent`), e
-        cada hit traz `value`, `service_name`, `host_name` e os atributos
-        do ponto (ex.: `mount_point`). Stream inexistente (métrica nunca
-        recebida) levanta erro HTTP — o chamador decide o que fazer.
+        """Busca pontos de uma métrica.
+
+        No OpenObserve cada métrica OTLP vira um stream próprio com o nome
+        dela (pontos em `.` viram `_`, ex.: `shop.checkout.requests` →
+        `shop_checkout_requests`); não existe stream `default` de métricas.
+        Histogramas viram vários streams (`<nome>_count`, `_sum`, `_bucket`).
+        Campos confirmados contra o `demo_app`: `value`, `service_name`,
+        `_timestamp` e os atributos da métrica como colunas (ex.: `outcome`).
         """
-        stream = stream or metric_name.replace(".", "_")
-        conditions = []
-        if service:
-            conditions.append(f"service_name = '{_escape(service)}'")
+        conditions = [f"service_name = '{_escape(service)}'"] if service else []
         where = " AND ".join(conditions) if conditions else "1=1"
-        sql = f'SELECT * FROM "{stream}" WHERE {where} ORDER BY _timestamp DESC'
+        sql = f'SELECT * FROM "{_escape_identifier(metric_name)}" WHERE {where} ORDER BY _timestamp DESC'
         start_us, end_us = _resolve_window(start_time, end_time)
         return self._search("metrics", sql, start_us, end_us, size)
 
@@ -254,6 +250,10 @@ class OpenObserveClient:
 
 def _escape(value: str) -> str:
     return value.replace("'", "''")
+
+
+def _escape_identifier(value: str) -> str:
+    return value.replace('"', '""')
 
 
 def _resolve_window(start_time: str | int | None, end_time: str | int | None, default_minutes: int = 60) -> tuple[int, int]:

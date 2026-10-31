@@ -12,6 +12,7 @@ import json
 import time
 from typing import TypedDict
 
+from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 
 from agents.llm import get_provider
@@ -22,6 +23,16 @@ from agents import deep_dive_agent, diagnosis_agent, verifier_agent, plain_summa
 from agents.report import build_report
 from agents.fix_prompt import build_fix_prompt
 from agents import report_store
+
+# CLI e webapp importam este módulo antes de ler qualquer variável; o .env
+# não sobrescreve o que já estiver exportado no shell.
+load_dotenv()
+
+# Padrões apontam para o ambiente de referência (demo_app): o shop-api é a
+# porta de entrada dos relatos de usuário. Serviço vazio busca em todos, útil
+# quando a evidência está numa dependência (ex.: payment-service).
+DEFAULT_SERVICE = "shop-api"
+DEFAULT_METRIC = "shop_checkout_requests"
 
 
 class IncidentState(TypedDict, total=False):
@@ -108,9 +119,9 @@ def build_graph() -> StateGraph:
 
 def run_investigation(
     error_report: str,
-    service: str = "tracepilot-demo-app",
+    service: str | None = DEFAULT_SERVICE,
     trace_id: str | None = None,
-    metric_name: str = "duration",
+    metric_name: str = DEFAULT_METRIC,
     window_minutes: int = 60,
     investigation_id: str | None = None,
     related_services: list[str] | None = None,
@@ -127,12 +138,13 @@ def run_investigation(
 
     initial_state: IncidentState = {
         "error_report": error_report,
-        "service": service,
         "metric_name": metric_name,
         "start_time": start_us,
         "end_time": now_us,
         "related_services": related_services or [],
     }
+    if service:
+        initial_state["service"] = service
     if trace_id:
         initial_state["trace_id"] = trace_id
 
@@ -174,9 +186,13 @@ def run_investigation(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Investiga um incidente com os agentes do TracePilot.")
     parser.add_argument("error_report", help="Relato do erro (ex.: mensagem do usuário ou do endpoint).")
-    parser.add_argument("--service", default="tracepilot-demo-app", help="Nome do serviço a investigar.")
+    parser.add_argument(
+        "--service", default=DEFAULT_SERVICE, help="Nome do serviço a investigar (vazio = todos os serviços)."
+    )
     parser.add_argument("--trace-id", default=None, help="trace_id específico, se já conhecido.")
-    parser.add_argument("--metric-name", default="duration", help="Nome da métrica a consultar (quando disponível).")
+    parser.add_argument(
+        "--metric-name", default=DEFAULT_METRIC, help="Métrica a consultar (nome do stream no OpenObserve)."
+    )
     parser.add_argument("--window-minutes", type=int, default=60, help="Janela de busca, em minutos, a partir de agora.")
     parser.add_argument("--json", action="store_true", help="Imprime o estado final completo em JSON em vez do relatório formatado.")
     return parser.parse_args()

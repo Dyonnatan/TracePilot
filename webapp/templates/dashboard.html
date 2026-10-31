@@ -58,17 +58,18 @@
   {% endif %}
 </section>
 
-<section class="card" id="investigar" data-tour="investigate">
-  <div class="section-head"><span class="label">Investigar com IA</span></div>
-  <form method="post" action="/investigations">
-    <div class="investigate">
-      <textarea name="error_report" id="error-report" placeholder="O que está acontecendo? Ex.: cliente não consegue finalizar a compra" required></textarea>
-      <button type="submit">Investigar</button>
-    </div>
-    <details class="investigate-more">
-      <summary>Serviço</summary>
-      <input type="text" name="service" value="{{ monitored_service }}">
-    </details>
+<section class="panel">
+  <h2>Investigar um problema</h2>
+  <form method="post" action="/investigations" class="investigate-form">
+    <label>
+      O que está acontecendo?
+      <textarea name="error_report" placeholder="ex.: cliente reclamou que não conseguiu finalizar a compra, apareceu erro 500" required></textarea>
+    </label>
+    <label class="inline">
+      Serviço
+      <input type="text" name="service" value="shop-api" placeholder="vazio = todos os serviços">
+    </label>
+    <button type="submit">Investigar</button>
   </form>
 </section>
 

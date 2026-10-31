@@ -1,0 +1,53 @@
+name: retry_storm
+title: Tempestade de retries do shop-api sobre o payment-service lento
+category: performance_antipattern
+culprit_component: shop-api (feature flag payment_retry_no_backoff) + rede lenta até o payment-service
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: composite
+  params:
+    steps:
+      - driver: fault_flag
+        params:
+          target: shop
+          flag: payment_retry_no_backoff
+          config:
+            attempts: 5
+      - driver: toxiproxy
+        params:
+          proxy: payment
+          toxic: payment_retry_latency
+          type: latency
+          stream: downstream
+          attributes:
+            latency: 1000
+            jitter: 300
+
+user_symptom: >
+  "Finalizar pedido" demora vários segundos; a maioria acaba concluindo, mas
+  algumas tentativas ainda falham com "Não consegui concluir a operação".
+
+expected_signals:
+  traces:
+    - Um único POST /checkout tem vários spans cliente para /authorize em sequência, sem intervalo entre eles.
+    - Cada tentativa que estoura termina em ~1000 ms (timeout); o checkout inteiro chega a ~5 s.
+    - O payment-service recebe várias autorizações do mesmo order_ref.
+  logs:
+    - shop-api loga "change.event" com change.type=feature_flag e change.flag=payment_retry_no_backoff.
+    - payment.timeout aparece só quando todas as 5 tentativas falham.
+  metrics:
+    - payment.client.duration por checkout multiplica (atributo attempt chega a 5).
+    - Requisições no payment-service crescem bem mais que os checkouts.
+    - shop.checkout.duration sobe para segundos.
+
+root_cause: >
+  Duas causas combinadas. A rede até o payment-service ficou lenta (~1000 ms
+  com jitter, perto do timeout de 1000 ms) e a feature flag
+  payment_retry_no_backoff faz o shop-api repetir a autorização até 5 vezes
+  sem backoff, multiplicando a carga sobre a dependência lenta.
+
+red_herrings:
+  - Parece payment_latency, mas a assinatura é a repetição de spans /authorize no mesmo trace.
+  - Desligar só a latência resolve o sintoma; o retry sem backoff continua sendo um risco latente.

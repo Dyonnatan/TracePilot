@@ -1,0 +1,43 @@
+name: payment_errors
+title: Adquirente devolvendo 5XX em parte das autorizações
+category: dependency
+culprit_component: payment-service (chamada ao adquirente, span acquirer.charge)
+pitch_role: extra
+ttl_seconds: 120
+
+activation:
+  driver: fault_flag
+  params:
+    target: payment
+    flag: acquirer_failure
+    config:
+      rate: 0.3
+      status: 503
+
+user_symptom: >
+  Cerca de 1 em cada 3 tentativas de "Finalizar pedido" termina com "Não
+  consegui concluir a operação", na hora, sem espera. Tentar de novo às vezes
+  funciona. Vitrine, produto, carrinho e cupom estão normais.
+
+expected_signals:
+  traces:
+    - Span servidor do payment-service para /authorize termina com 503 e contém o span acquirer.charge com erro AcquirerUnavailable.
+    - Span cliente HTTP do shop-api para /authorize termina rápido (dezenas de ms) com status 503, sem timeout.
+    - Span servidor do shop-api para POST /checkout termina com 502.
+  logs:
+    - payment-service loga "acquirer.unavailable" com o order_ref.
+    - shop-api loga "payment.error" com payment.upstream_status=503.
+  metrics:
+    - shop.checkout.requests com outcome=payment_error em ~30% dos checkouts.
+    - payment.client.duration com outcome=http_error e latência baixa.
+    - CPU/memória de todos os containers normais.
+
+root_cause: >
+  O adquirente (span acquirer.charge dentro do payment-service) está
+  recusando ~30% das cobranças com AcquirerUnavailable. O payment-service
+  devolve 503 e o shop-api traduz para 502. Não é rede nem timeout: as
+  respostas chegam rápido, só que com erro.
+
+red_herrings:
+  - Parece com payment_latency (falha no checkout), mas não há timeout; as chamadas falham rápido e só uma fração falha.
+  - Nenhum change.event aparece; a falha não veio de deploy nem de feature flag do shop-api.
