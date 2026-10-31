@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tracepilot-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "source .venv/bin/activate && uvicorn webapp.main:app --reload --port $PORT"],
+      "port": 8000,
+      "autoPort": true
+    }
+  ]
+}
